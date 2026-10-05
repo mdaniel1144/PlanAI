@@ -1,0 +1,31 @@
+{
+  "name": "@habitat/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "pnpm typecheck",
+    "db:migrate": "tsx src/infrastructure/database/migrate.ts",
+    "auth:bootstrap": "tsx src/modules/auth/bootstrap.ts"
+  },
+  "dependencies": {
+    "@habitat/contracts": "workspace:*",
+    "@habitat/domain": "workspace:*",
+    "@habitat/geometry": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.3",
+    "express": "^5.2.1",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.3",
+    "typescript": "~6.0.2"
+  }
+}

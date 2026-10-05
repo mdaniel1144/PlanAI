@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"],
+    "paths": {
+      "three": ["../frontend/node_modules/@types/three/index.d.ts"]
+    }
+  },
+  "include": ["**/*.ts"]
+}

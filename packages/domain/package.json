@@ -1,0 +1,20 @@
+{
+  "name": "@habitat/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixture": "./src/fixture.ts",
+    "./topology": "./src/topology.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2"
+  }
+}

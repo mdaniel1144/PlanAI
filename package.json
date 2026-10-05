@@ -1,0 +1,57 @@
+{
+  "name": "habitat",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n frontend,server \"pnpm dev:frontend\" \"pnpm dev:server\"",
+    "dev:frontend": "pnpm --filter @habitat/frontend dev",
+    "dev:server": "pnpm --filter @habitat/server dev",
+    "dev:web": "pnpm dev:frontend",
+    "dev:api": "pnpm dev:server",
+    "start:server": "pnpm --filter @habitat/server start",
+    "start:api": "pnpm start:server",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck && tsc -p tsconfig.tools.json && tsc -p tests/tsconfig.json",
+    "build": "pnpm typecheck && pnpm --filter @habitat/frontend exec vite build",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "db:migrate": "pnpm --filter @habitat/server db:migrate",
+    "preview": "pnpm --filter @habitat/frontend preview",
+    "format": "prettier --write frontend server packages tests docs *.ts *.json *.md",
+    "auth:bootstrap": "pnpm --filter @habitat/server auth:bootstrap"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.13.3",
+    "@types/supertest": "^7.2.1",
+    "better-sqlite3": "^13.0.3",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "pnpm": "^10.34.5",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.2",
+    "@habitat/domain": "workspace:*",
+    "@habitat/contracts": "workspace:*",
+    "@habitat/geometry": "workspace:*"
+  },
+  "workspaces": [
+    "frontend",
+    "server",
+    "packages/*"
+  ],
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

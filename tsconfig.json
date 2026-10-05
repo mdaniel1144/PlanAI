@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./frontend/tsconfig.json" },
+    { "path": "./frontend/tsconfig.vite.json" },
+    { "path": "./server/tsconfig.json" },
+    { "path": "./packages/domain/tsconfig.json" },
+    { "path": "./packages/contracts/tsconfig.json" },
+    { "path": "./packages/geometry/tsconfig.json" },
+    { "path": "./tests/tsconfig.json" },
+    { "path": "./tsconfig.tools.json" }
+  ]
+}
