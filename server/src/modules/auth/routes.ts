@@ -1,9 +1,9 @@
-import { lengthDisplayUnitSchema } from "@habitat/domain";
 import { AuthError } from "./errors";
 import { Router } from "express";
 import { z } from "zod";
 import {
   loginRequest,
+  updateDisplayRequest,
   createUserRequest,
   updateUserRequest,
   updateAccountRequest,
@@ -45,21 +45,23 @@ export function authenticatedAuthRoutes(auth: AuthService) {
       .json({ ok: true });
   });
   router.patch("/account/display", (req, res) => {
-    const parsed = z
-      .object({ lengthDisplayUnit: lengthDisplayUnitSchema })
-      .strict()
-      .safeParse(req.body);
+    const parsed = updateDisplayRequest.safeParse(req.body);
     if (!parsed.success)
       throw new AuthError(
         400,
         "ITEM_DISPLAY_UNIT_INVALID",
-        "Choose centimeters or meters.",
+        "Choose a supported theme and measurement unit.",
       );
     const userId = identity(res).user.id;
-    auth.repo.db
-      .prepare("UPDATE users SET length_display_unit=? WHERE id=?")
-      .run(parsed.data.lengthDisplayUnit, userId);
-    res.json(safeUser(auth.repo.require(userId)));
+    // A queued write from a tab whose session changed must never affect the new account.
+    const expectedUser = req.get("X-Habitat-User");
+    if (expectedUser && expectedUser !== userId)
+      throw new AuthError(
+        409,
+        "DISPLAY_USER_CHANGED",
+        "Your signed-in account changed. Reload to continue.",
+      );
+    res.json(safeUser(auth.repo.updateDisplay(userId, parsed.data)));
   });
   router.patch("/account", (req, res) => {
     const user = auth.updateUser(

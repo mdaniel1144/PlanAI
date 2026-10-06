@@ -93,7 +93,8 @@ const moduleName = (specifier: string) =>
     ? specifier.split("/").slice(0, 2).join("/")
     : specifier.split("/")[0];
 function localTarget(file: string, specifier: string) {
-  const base = resolve(dirname(file), specifier);
+  // Vite queries change loading behavior, not the owning source module.
+  const base = resolve(dirname(file), specifier.split("?")[0]);
   return [base, `${base}.ts`, `${base}.tsx`, resolve(base, "index.ts")].find(
     (path) => existsSync(path),
   );

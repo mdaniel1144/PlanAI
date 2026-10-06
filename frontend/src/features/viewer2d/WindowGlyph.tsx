@@ -26,14 +26,14 @@ export function WindowGlyph({
         y={-band / 2}
         width={w.width}
         height={band}
-        fill={selected ? "#90b4bb" : "#d9e6e7"}
-        stroke="#52787e"
+        fill={selected ? "var(--selected-bg)" : "var(--surface-secondary)"}
+        stroke="var(--info)"
         strokeWidth={w.assembly?.profile.frameFaceWidth ?? 0.025}
       />
       {!panels && (
         <path
           d={`M 0 0 H ${w.width}`}
-          stroke="#69868a"
+          stroke="var(--info)"
           strokeDasharray=".05 .04"
           strokeWidth=".02"
         />
@@ -59,18 +59,18 @@ export function WindowGlyph({
               width={pw}
               height={ph}
               fill="none"
-              stroke="#52787e"
+              stroke="var(--info)"
               strokeWidth=".018"
             />
             {p.operation === "FIXED" && (
               <path
                 d={`M ${x + pw / 2 - 0.035} ${y + ph / 2} h .07 M ${x + pw / 2} ${y + ph / 2 - 0.035} v .07`}
-                stroke="#52787e"
+                stroke="var(--info)"
                 strokeWidth=".014"
               />
             )}
             {p.operation === "SLIDING" && (
-              <g stroke="#305e72" strokeWidth=".025" fill="none">
+              <g stroke="var(--info)" strokeWidth=".025" fill="none">
                 <path
                   d={`M ${x + 0.15 * pw} ${y + ph / 2} H ${x + 0.85 * pw}`}
                   strokeDasharray={
@@ -97,13 +97,13 @@ export function WindowGlyph({
             )}
             {hinged && (
               <g
-                stroke="#52787e"
+                stroke="var(--info)"
                 strokeWidth=".02"
                 fill="none"
                 data-hinge={p.orientation!.hingeEndpoint}
                 data-swing={p.orientation!.swingSide}
               >
-                <circle cx={hinge} cy={0} r=".035" fill="#52787e" />
+                <circle cx={hinge} cy={0} r=".035" fill="var(--info)" />
                 <path
                   d={`M ${hinge} 0 L ${hinge} ${side * pw} L ${hinge + (hinge === x ? pw : -pw)} 0`}
                   strokeDasharray=".06 .04"
@@ -114,7 +114,7 @@ export function WindowGlyph({
               <path
                 d={`M ${x} ${y} L ${x + pw / 2} ${y + ph} L ${x + pw} ${y}`}
                 fill="none"
-                stroke="#52787e"
+                stroke="var(--info)"
                 strokeWidth=".018"
               />
             )}
@@ -122,7 +122,7 @@ export function WindowGlyph({
               <path
                 d={`M ${x} ${y + ph} L ${x + pw / 2} ${y} L ${x + pw} ${y + ph}`}
                 fill="none"
-                stroke="#52787e"
+                stroke="var(--info)"
                 strokeWidth=".018"
               />
             )}

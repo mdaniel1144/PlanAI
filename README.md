@@ -72,3 +72,5 @@ pnpm test:e2e
 Browser tests use an isolated database. Set `CHROMIUM_PATH` to an installed Chromium executable when needed. Tests cover migration of populated databases, deletion of upload files, current-scene persistence, stale writes, relational constraints, drawing, double-click completion, saving/reloading, 3D consistency, and JSON export.
 
 See [Architecture](docs/ARCHITECTURE.md), [Editor](docs/ARCHITECTURAL_EDITOR.md), [Window UI and usage guide](docs/WINDOWS.md), and [Door orientation](docs/DOOR_ORIENTATION.md).
+
+See [Product Studio redesign and visual review](docs/PRODUCT_STUDIO_REDESIGN.md) for the catalog interface and screenshots.

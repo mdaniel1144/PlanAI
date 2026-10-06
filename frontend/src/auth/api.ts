@@ -3,6 +3,7 @@ import {
   currentUserSchema,
   managedUserSchema,
   type LoginRequest,
+  type UpdateDisplayRequest,
   type CreateUserRequest,
   type UpdateUserRequest,
   type ChangePasswordRequest,
@@ -14,12 +15,16 @@ const body = (method: string, input?: unknown): RequestInit => ({
   ...(input === undefined ? {} : { body: JSON.stringify(input) }),
 });
 export const authClient = {
-  display: (lengthDisplayUnit: "CM" | "M") =>
-    api(
-      "/account/display",
-      currentUserSchema,
-      body("PATCH", { lengthDisplayUnit }),
-    ),
+  display: (
+    input: UpdateDisplayRequest,
+    userId: string,
+    signal?: AbortSignal,
+  ) =>
+    api("/account/display", currentUserSchema, {
+      ...body("PATCH", input),
+      signal,
+      headers: { "X-Habitat-User": userId },
+    }),
   me: () => api("/auth/me", currentUserSchema),
   login: (input: LoginRequest) =>
     api("/auth/login", currentUserSchema, body("POST", input)),

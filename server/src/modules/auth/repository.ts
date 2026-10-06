@@ -1,13 +1,14 @@
 import type { Db } from "../../infrastructure/database/database";
 import type {
   ManagedUser,
+  UpdateDisplayRequest,
   CreateUserRequest,
   UpdateUserRequest,
 } from "@habitat/contracts";
 import { randomUUID } from "node:crypto";
 import { AuthError } from "./errors";
 export type UserRecord = ManagedUser & { passwordHash: string };
-const columns = `id, email, name, role, status, created_at AS createdAt, updated_at AS updatedAt, last_login_at AS lastLoginAt, length_display_unit AS lengthDisplayUnit`;
+const columns = `id, email, name, role, status, created_at AS createdAt, updated_at AS updatedAt, last_login_at AS lastLoginAt, length_display_unit AS lengthDisplayUnit, theme, display_updated_at AS displayUpdatedAt, display_revision AS displayRevision`;
 export class AuthRepository {
   constructor(readonly db: Db["sqlite"]) {}
   byId(id: string) {
@@ -33,6 +34,22 @@ export class AuthRepository {
     const user = this.byId(id);
     if (!user) throw new AuthError(404, "USER_NOT_FOUND", "User not found.");
     return user;
+  }
+  updateDisplay(id: string, input: UpdateDisplayRequest) {
+    // One statement preserves unrelated fields and serializes writers across devices.
+    this.db
+      .prepare(
+        `UPDATE users SET
+      theme=COALESCE(?,theme), length_display_unit=COALESCE(?,length_display_unit),
+      display_updated_at=?, display_revision=display_revision+1 WHERE id=?`,
+      )
+      .run(
+        input.theme ?? null,
+        input.lengthDisplayUnit ?? null,
+        new Date().toISOString(),
+        id,
+      );
+    return this.require(id);
   }
   activeAdmins() {
     return (

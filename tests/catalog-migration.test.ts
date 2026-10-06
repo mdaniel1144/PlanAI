@@ -127,3 +127,33 @@ it("retains legacy price and currency differences as optional color overrides", 
     db.close();
   }
 });
+
+it("pins legacy placements to their existing asset without copying canonical records", () => {
+  const db = legacy();
+  try {
+    db.exec(
+      "INSERT INTO project_item_instances VALUES('placed','state','floor',NULL,'item','blue',2,3,.5)",
+    );
+    const before = db
+      .prepare("SELECT * FROM project_item_instances")
+      .get() as Record<string, unknown>;
+    const assets = db.prepare("SELECT * FROM item_assets").all();
+    db.exec(
+      readFileSync(
+        new URL(
+          "../server/migrations/0016_placement_asset_pin.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    expect(db.prepare("SELECT * FROM project_item_instances").get()).toEqual({
+      ...before,
+      model_asset_id: "model",
+    });
+    expect(db.prepare("SELECT * FROM item_assets").all()).toEqual(assets);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  } finally {
+    db.close();
+  }
+});

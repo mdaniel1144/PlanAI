@@ -24,6 +24,7 @@ import {
   distance,
   exactEndpoint,
   snapDrawing,
+  pointInPolygon,
   projectOnWall,
   splitJunctions,
   deriveRoomConnections,
@@ -114,7 +115,7 @@ export function useDrawing({
   const drag = useRef<{
     scene: HomeScene;
     wallId: string;
-    part: "wall" | "start" | "end" | "window";
+    part: "wall" | "start" | "end" | "window" | "item";
     origin: Point;
   } | null>(null);
   const previewRef = useRef<HomeScene | null>(null);
@@ -639,7 +640,7 @@ export function useDrawing({
     );
   const onDragStart = (
     wallId: string,
-    part: "wall" | "start" | "end" | "window",
+    part: "wall" | "start" | "end" | "window" | "item",
     p: Point,
   ) => {
     if (tool !== "select" || busy) return;
@@ -655,6 +656,41 @@ export function useDrawing({
           ? f.windows.find((o) => o.id === d.wallId)
           : undefined,
       w = f.walls.find((w) => w.id === (window?.wallId ?? d.wallId))!;
+    if (d.part === "item") {
+      const instance = f.itemInstances?.find((i) => i.id === d.wallId);
+      if (!instance) return;
+      const point = snapDrawing(
+        {
+          x: instance.positionX + p.x - d.origin.x,
+          y: instance.positionY + p.y - d.origin.y,
+        },
+        f.walls,
+        undefined,
+        snapGrid ? spacing : undefined,
+      ).point;
+      const room = f.rooms.find(
+        (r) => r.boundary.length >= 3 && pointInPolygon(point, r.boundary),
+      );
+      if ((room ? room.floorElevation : f.elevation) == null) {
+        setError(
+          "Confirm the Space or Floor elevation before moving this item.",
+        );
+        return;
+      }
+      const next = structuredClone(d.scene);
+      const target = next.floors
+        .find((fl) => fl.id === f.id)!
+        .itemInstances!.find((i) => i.id === instance.id)!;
+      Object.assign(target, {
+        positionX: point.x,
+        positionY: point.y,
+        spaceId: room?.id ?? null,
+      });
+      previewRef.current = next;
+      setPreview(next);
+      setError("");
+      return;
+    }
     if (window) {
       const next = structuredClone(d.scene),
         target = next.floors
@@ -711,6 +747,10 @@ export function useDrawing({
     previewRef.current = null;
     setPreview(null);
     if (d && next) {
+      if (d.part === "item") {
+        commit(next);
+        return;
+      }
       const f = next.floors.find((f) => f.id === floor!.id)!;
       safely(() =>
         editFloor(

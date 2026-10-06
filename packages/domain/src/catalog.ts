@@ -296,6 +296,8 @@ export const projectItemInstanceSchema = z
     spaceId: uuid.nullable().default(null),
     itemId: uuid,
     variantId: uuid,
+    // Exact existing runtime asset identity; omitted only by legacy writers.
+    modelAssetId: uuid.optional(),
     positionX: z.number().finite().min(-1e6).max(1e6),
     positionY: z.number().finite().min(-1e6).max(1e6),
     rotation: z

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   dimensionSourceSchema,
   dimensionPlausibility,
@@ -10,15 +10,18 @@ import {
 } from "@habitat/domain";
 import { useUnits } from "../../units/useUnits";
 import { LengthInput } from "../../units/LengthInput";
+import { StudioSplit, InspectorSection } from "./Studio";
 import { catalogClient } from "./api";
-const ModelPreview = lazy(() => import("./ModelPreview"));
+import ModelPreview from "./LazyModelPreview";
 export function Dimensions({
   item,
   perform,
   busy,
+  onDirty,
 }: {
   item: Item;
   busy: boolean;
+  onDirty?: () => void;
   issues?: { field: string; message: string }[];
   perform: (action: () => Promise<Item>, success?: string) => Promise<void>;
 }) {
@@ -98,33 +101,46 @@ export function Dimensions({
   const size = (d: { width: number; depth: number; height: number }) =>
     `${units.value(d.width)} × ${units.value(d.depth)} × ${units.value(d.height)} ${units.label}`;
   const change = () => {
+    onDirty?.();
     setVerified(false);
     setAck(false);
   };
   return (
-    <>
-      <h2>Raw GLB bounds</h2>
-      <p>
-        {(["width", "depth", "height"] as const)
-          .map((k) => asset.inspection!.dimensions[k].toFixed(4))
-          .join(" × ")}{" "}
-        model units (width × depth × height)
-      </p>
-      <p>
-        These are model-space units and are not yet verified real product
-        dimensions.
-      </p>
-      {item.calibrationStatus === "VERIFIED" && item.dimensions ? (
-        <p>
-          Confirmed real product size: {size(item.dimensions)} · Product
-          orientation: {asset.calibration?.orientation}°
-        </p>
-      ) : (
-        <p>
-          Dimensions unverified. Existing saved measurements require a verified
-          source.
-        </p>
-      )}
+    <StudioSplit
+      viewer={
+        <>
+          <ModelPreview
+            item={
+              candidate
+                ? {
+                    ...item,
+                    assets: item.assets.map((a) =>
+                      a.id === candidate.id ? candidate : a,
+                    ),
+                  }
+                : item
+            }
+            variant={item.defaultColor ?? undefined}
+            previewOrientation={orientation}
+          />
+          <div className="model-source">
+            <h3>Raw GLB bounds</h3>
+            <p>
+              {(["width", "depth", "height"] as const)
+                .map((k) => asset.inspection!.dimensions[k].toFixed(4))
+                .join(" × ")}{" "}
+              model units (width × depth × height)
+            </p>
+            <p>Model-space units, not verified real dimensions.</p>
+            <p>
+              Oriented model axes: width {oriented.width.toFixed(4)}, depth{" "}
+              {oriented.depth.toFixed(4)}, height {oriented.height.toFixed(4)}{" "}
+              model units.
+            </p>
+          </div>
+        </>
+      }
+    >
       <form
         className="item-form item-dimensions-form"
         onSubmit={(e) => {
@@ -158,165 +174,199 @@ export function Dimensions({
           );
         }}
       >
-        <label>
-          Product orientation
-          <select
-            value={orientation}
+        <InspectorSection title="Real product dimensions">
+          <p className="inspector-help">
+            Enter measurements from the real product. The model will keep its
+            proportions.
+          </p>
+          <fieldset
+            className="orientation-control"
             disabled={!!item.usageCount}
-            onChange={(e) => {
-              setOrientation(Number(e.target.value) as typeof orientation);
-              change();
-            }}
           >
-            {[0, 90, 180, 270].map((n) => (
-              <option key={n} value={n}>
-                {n}°
-              </option>
-            ))}
-          </select>
-        </label>
-        <p>
-          Defines how the 3D model axes map to product width/depth. Camera
-          movement does not change product dimensions.
-        </p>
-        <p>
-          Oriented model axes: width {oriented.width.toFixed(4)}, depth{" "}
-          {oriented.depth.toFixed(4)}, height {oriented.height.toFixed(4)} model
-          units.
-        </p>
-        <h2>Real product dimensions</h2>
-        <p>Display unit: {units.label} (from Display &amp; Units settings)</p>
-        {(["width", "depth", "height"] as const).map((k) => (
-          <label key={k}>
-            Real {k} ({units.label})
-            <LengthInput
-              required
-              min="0.000001"
-              meters={real[k]}
-              disabled={!!item.usageCount}
-              onEmpty={() => {
-                setReal((prev) => ({ ...prev, [k]: null }));
-                change();
-              }}
-              onMetersChange={(n) => {
-                setReal((prev) => ({ ...prev, [k]: n }));
-                change();
-              }}
-            />
-          </label>
-        ))}
-        {canonical && (
-          <div aria-label="Dimension validation">
-            <p role="status">
-              {candidate
-                ? "✓ Model proportions match. This checks shape, not real-world accuracy."
-                : "MODEL_DIMENSION_PROPORTION_MISMATCH: These dimensions would stretch the model."}
-            </p>
-            {warning ? (
-              <>
-                <p role="alert">
-                  {warning.code}: {warning.message}
-                </p>
-                {warning.suggestedFactor && (
-                  <p>
-                    Suggested interpretation:{" "}
-                    {size({
-                      width: canonical.width * warning.suggestedFactor,
-                      depth: canonical.depth * warning.suggestedFactor,
-                      height: canonical.height * warning.suggestedFactor,
-                    })}
-                    . Did you intend these values in{" "}
-                    {warning.suggestedFactor === 100
-                      ? "metres rather than centimeters"
-                      : "centimeters rather than metres"}
-                    ? Check a verified source and correct the inputs explicitly.
-                  </p>
-                )}
-                <label className="check-label">
+            <legend>Product orientation</legend>
+            <div className="segmented-control">
+              {([0, 90, 180, 270] as const).map((n) => (
+                <label key={n}>
                   <input
-                    type="checkbox"
-                    checked={ack}
-                    onChange={(e) => setAck(e.target.checked)}
+                    type="radio"
+                    name="orientation"
+                    aria-label={`${n}°`}
+                    checked={orientation === n}
+                    onChange={() => {
+                      setOrientation(n);
+                      change();
+                    }}
                   />
-                  These unusual dimensions are correct.
+                  <span>{n}°</span>
                 </label>
-              </>
-            ) : (
-              <p>
-                {dimensionPlausibility(item.categoryId, canonical) === null
-                  ? "No category size warning. Real measurements still require verification."
-                  : ""}
-              </p>
-            )}
-            <p role="status">
-              {renderedValid
-                ? "✓ Rendered calibrated size matches product dimensions"
-                : candidate && !bounds
-                  ? "Checking rendered calibrated size…"
-                  : "MODEL_RENDERED_DIMENSION_MISMATCH: Rendered size has not been verified."}
-            </p>
-          </div>
-        )}
-        <label>
-          Dimension source
-          <select
-            required
-            value={source}
-            onChange={(e) => {
-              setSource(e.target.value);
-              setVerified(false);
-            }}
-          >
-            <option value="">Choose a verified source</option>
-            {dimensionSourceSchema.options.map((v) => (
-              <option key={v} value={v}>
-                {v.toLowerCase().replaceAll("_", " ")}
-              </option>
+              ))}
+            </div>
+          </fieldset>
+          <p className="inspector-help">
+            Maps model axes to width and depth. Camera movement never changes
+            dimensions.
+          </p>
+          <div className="dimension-inputs">
+            {(["width", "depth", "height"] as const).map((k) => (
+              <label className="dimension-row" key={k}>
+                <span className="capitalize">{k}</span>
+                <span className="unit-input">
+                  <LengthInput
+                    aria-label={`Real ${k} (${units.label})`}
+                    required
+                    compact
+                    min="0.000001"
+                    meters={real[k]}
+                    disabled={!!item.usageCount}
+                    onEmpty={() => {
+                      setReal((prev) => ({ ...prev, [k]: null }));
+                      change();
+                    }}
+                    onMetersChange={(n) => {
+                      setReal((prev) => ({ ...prev, [k]: n }));
+                      change();
+                    }}
+                  />
+                  <span aria-hidden="true">{units.label}</span>
+                </span>
+              </label>
             ))}
-          </select>
-        </label>
-        <label className="check-label">
-          <input
-            type="checkbox"
-            required
-            checked={verified}
-            onChange={(e) => setVerified(e.target.checked)}
-          />
-          I have verified these dimensions against the real product.
-        </label>
-        <button
-          className="button"
-          disabled={
-            busy ||
-            !candidate ||
-            !renderedValid ||
-            !source ||
-            !verified ||
-            (!!warning && !ack)
-          }
-        >
-          Confirm dimensions
-        </button>
+          </div>
+        </InspectorSection>
+        <InspectorSection title="Validation">
+          {canonical ? (
+            <div
+              className="dimension-validation"
+              aria-label="Dimension validation"
+            >
+              <p
+                role="status"
+                className={candidate ? "validation-ok" : "validation-warning"}
+              >
+                {candidate
+                  ? "✓ Model proportions match"
+                  : "Dimensions would stretch the model. Check width, depth and height."}
+              </p>
+              <p className="inspector-help">
+                A shape check, not proof of real-world size.
+              </p>
+              <p
+                role="status"
+                className={renderedValid ? "validation-ok" : "inspector-help"}
+              >
+                {renderedValid
+                  ? "✓ Rendered calibrated size matches product dimensions"
+                  : candidate && !bounds
+                    ? "Checking rendered calibrated size…"
+                    : "Rendered size has not been verified."}
+              </p>
+              {warning && (
+                <div className="dimension-warning">
+                  <p role="alert">{warning.message}</p>
+                  {warning.suggestedFactor && (
+                    <p>
+                      Suggested interpretation:{" "}
+                      {size({
+                        width: canonical.width * warning.suggestedFactor,
+                        depth: canonical.depth * warning.suggestedFactor,
+                        height: canonical.height * warning.suggestedFactor,
+                      })}
+                      . Check the units against your source before correcting
+                      the inputs.
+                    </p>
+                  )}
+                  <label className="check-label">
+                    <input
+                      type="checkbox"
+                      checked={ack}
+                      onChange={(e) => setAck(e.target.checked)}
+                    />
+                    These unusual dimensions are correct.
+                  </label>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="inspector-help">
+              Enter all three measurements to check the model.
+            </p>
+          )}
+        </InspectorSection>
+        <InspectorSection title="Verification">
+          <label>
+            Dimension source
+            <select
+              required
+              value={source}
+              onChange={(e) => {
+                setSource(e.target.value);
+                setVerified(false);
+              }}
+            >
+              <option value="">Choose a verified source</option>
+              {dimensionSourceSchema.options.map((v) => (
+                <option key={v} value={v}>
+                  {v.toLowerCase().replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="check-label">
+            <input
+              type="checkbox"
+              required
+              checked={verified}
+              onChange={(e) => setVerified(e.target.checked)}
+            />
+            I have verified these dimensions against the real product.
+          </label>
+          <button
+            className="button primary"
+            disabled={
+              busy ||
+              !candidate ||
+              !renderedValid ||
+              !source ||
+              !verified ||
+              (!!warning && !ack)
+            }
+          >
+            Confirm dimensions
+          </button>
+          {item.calibrationStatus === "VERIFIED" && item.dimensions ? (
+            <p className="confirmation-summary">
+              Confirmed real product size: {size(item.dimensions)} · Product
+              orientation: {asset.calibration?.orientation}°
+            </p>
+          ) : (
+            <p className="inspector-help">
+              Dimensions unverified. A verified source is required.
+            </p>
+          )}
+        </InspectorSection>
       </form>
-      <details>
+      <details className="advanced-details">
         <summary>Advanced calibration</summary>
         <p>Oriented raw bounds (model units): {JSON.stringify(oriented)}</p>
         <p>
-          Implied scale X (width):{" "}
-          {canonical ? canonical.width / oriented.width : "—"}; Y (height):{" "}
-          {canonical ? canonical.height / oriented.height : "—"}; Z (depth):{" "}
+          Implied scale X: {canonical ? canonical.width / oriented.width : "—"};
+          Y: {canonical ? canonical.height / oriented.height : "—"}; Z:{" "}
           {canonical ? canonical.depth / oriented.depth : "—"}
         </p>
         <p>
-          Calculated metres per model unit:{" "}
+          Metres per model unit:{" "}
           {candidate?.calibration?.metresPerModelUnit ?? "—"}
         </p>
-        <p>Canonical dimensions in metres: {JSON.stringify(real)}</p>
+        <p>Canonical metres: {JSON.stringify(real)}</p>
         <p>Anchor: bottom-center</p>
         <p>
-          Measured world bounds in metres:{" "}
-          {bounds ? JSON.stringify(bounds) : "Pending"}
+          Measured world bounds: {bounds ? JSON.stringify(bounds) : "Pending"}
         </p>
+        {warning && <p>{warning.code}</p>}
+        {canonical && !candidate && <p>MODEL_DIMENSION_PROPORTION_MISMATCH</p>}
+        {canonical && !renderedValid && (
+          <p>MODEL_RENDERED_DIMENSION_MISMATCH</p>
+        )}
         {proof?.key === key && proof.error && <p>{proof.error}</p>}
         {item.dimensionVerification && (
           <p>
@@ -326,20 +376,6 @@ export function Dimensions({
           </p>
         )}
       </details>
-      <Suspense fallback={<p>Loading preview…</p>}>
-        <ModelPreview
-          item={
-            candidate
-              ? {
-                  ...item,
-                  assets: item.assets.map((a) =>
-                    a.id === candidate.id ? candidate : a,
-                  ),
-                }
-              : item
-          }
-        />
-      </Suspense>
-    </>
+    </StudioSplit>
   );
 }

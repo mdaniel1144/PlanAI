@@ -72,7 +72,7 @@ export function UserMenu() {
               Account
             </Link>
             <Link to="/settings/display" onClick={() => setOpen(false)}>
-              Display &amp; Units
+              Display &amp; Appearance
             </Link>
             {user.role === "ADMIN" && (
               <Link to="/admin/items" onClick={() => setOpen(false)}>

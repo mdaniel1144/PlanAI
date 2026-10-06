@@ -1,5 +1,4 @@
-import { useContext } from "react";
-import { AuthContext } from "../auth/context";
+import { useDisplayPreferences } from "../display/context";
 import {
   formatLength,
   formatLengthValue,
@@ -10,7 +9,7 @@ import {
   displayLengthToMeters,
 } from "@habitat/domain";
 export function useUnits() {
-  const unit = useContext(AuthContext)?.user?.lengthDisplayUnit ?? "CM";
+  const unit = useDisplayPreferences().lengthDisplayUnit;
   return {
     unit,
     label: lengthUnitLabel(unit),

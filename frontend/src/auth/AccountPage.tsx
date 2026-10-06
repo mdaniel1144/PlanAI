@@ -47,7 +47,7 @@ export function AccountPage() {
       <div className="account-page">
         <p className="eyebrow">SETTINGS</p>
         <h1>Account</h1>
-        <Link to="/settings/display">Display &amp; Units</Link>
+        <Link to="/settings/display">Display &amp; Appearance</Link>
         <p>Manage your profile and sign-in security.</p>
         {error && (
           <p className="form-error" role="alert">

@@ -1,9 +1,12 @@
 import { useUnits } from "../../units/useUnits";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Shell } from "../../components/Layout";
+import { ProductCard } from "./ProductCard";
+import { ColorSwatch } from "./Studio";
 import { formatPrice, type Item, type ItemVariant } from "@habitat/domain";
 import { catalogClient } from "./api";
-const ModelPreview = lazy(() => import("./ModelPreview"));
+import ModelPreview from "./LazyModelPreview";
 export function ProductDetail({
   item,
   onAdd,
@@ -16,10 +19,8 @@ export function ProductDetail({
   const variant = item.colors.find((v) => v.id === variantId) ?? item.colors[0];
   return (
     <div className="product-detail">
-      <Suspense fallback={<p>Loading preview…</p>}>
-        <ModelPreview item={item} variant={variant} />
-      </Suspense>
-      <div>
+      <ModelPreview item={item} variant={variant} />
+      <div className="product-detail-inspector">
         <p className="eyebrow">
           {item.categoryName} · {item.brandName}
         </p>
@@ -27,9 +28,25 @@ export function ProductDetail({
         <p>{item.description}</p>
         {variant && (
           <>
-            <h3>{formatPrice(variant.priceMinor, variant.currency)}</h3>
+            <h3 className="product-price">
+              {formatPrice(variant.priceMinor, variant.currency)}
+            </h3>
             <p>SKU {variant.effectiveSku ?? "—"}</p>
-            <label>
+            <div className="finish-selector">
+              <p className="eyebrow">Color · {variant.name}</p>
+              <div className="color-swatches">
+                {item.colors.map((c) => (
+                  <ColorSwatch
+                    key={c.id}
+                    color={c.color}
+                    name={c.name}
+                    selected={variant.id === c.id}
+                    onClick={() => setVariantId(c.id)}
+                  />
+                ))}
+              </div>
+            </div>
+            <label className="sr-only">
               Color
               <select
                 value={variant.id}
@@ -48,8 +65,21 @@ export function ProductDetail({
               <br />
               <small>Width × depth × height</small>
             </p>
+            {!onAdd && (
+              <>
+                <p className="inspector-help">
+                  Open a project to place this product at its verified size.
+                </p>
+                <Link className="button primary" to="/projects">
+                  Choose a project
+                </Link>
+              </>
+            )}
             {onAdd && (
-              <button className="button" onClick={() => onAdd(item, variant)}>
+              <button
+                className="button primary"
+                onClick={() => onAdd(item, variant)}
+              >
                 Add to Project
               </button>
             )}
@@ -285,61 +315,45 @@ export function Catalog({
       {error && <p role="alert">{error}</p>}
       <p aria-live="polite">{busy ? "Loading…" : `${data.total} items`}</p>
       <div className="catalog-grid">
-        {data.items.map((item) => {
-          const variant =
-              item.colors.find((v) => v.id === item.defaultVariantId) ??
-              item.colors[0],
-            thumb = item.thumbnailAssetId ?? variant?.thumbnailAssetId;
-          const card = (
-            <>
-              {thumb ? (
-                <img
-                  loading="lazy"
-                  src={`/api/item-assets/${thumb}`}
-                  alt={item.name}
-                />
-              ) : (
-                <div className="item-placeholder">No cover yet</div>
-              )}
-              <div className="item-card-info">
-                <p className="eyebrow">
-                  {item.brandName} · {item.categoryName}
-                </p>
-                <h3>{item.name}</h3>
-                <p>
-                  {variant
-                    ? formatPrice(variant.priceMinor, variant.currency)
-                    : "Add a color"}
-                </p>
-                <small>{variant?.effectiveSku}</small>
-                {admin && (
-                  <span className={`item-status ${item.status.toLowerCase()}`}>
-                    {item.status}
-                  </span>
-                )}
+        {busy && !data.items.length
+          ? Array.from({ length: 6 }, (_, i) => (
+              <div className="catalog-skeleton" aria-hidden="true" key={i}>
+                <div />
+                <span />
+                <span />
               </div>
-            </>
-          );
-          return admin ? (
-            <Link
-              className="item-card"
-              key={item.id}
-              to={`/admin/items/${item.id}`}
-            >
-              {card}
-            </Link>
-          ) : (
-            <button
-              className="item-card"
-              key={item.id}
-              onClick={() => select(item)}
-            >
-              {card}
-            </button>
-          );
-        })}
+            ))
+          : data.items.map((item) => (
+              <ProductCard
+                key={item.id}
+                item={item}
+                admin={admin}
+                onSelect={select}
+              />
+            ))}
       </div>
-      {!busy && !data.items.length && <p>No items match these filters.</p>}
+      {!busy && !data.items.length && (
+        <div className="catalog-empty">
+          <p className="eyebrow">Room for something new</p>
+          <h2>
+            {search || category || brand || status
+              ? "No matching products"
+              : "No products yet"}
+          </h2>
+          <p>
+            {search || category || brand || status
+              ? "Try a different search or adjust your filters."
+              : admin
+                ? "Add your first product to start building the catalog."
+                : "Published products will appear here, ready for your projects."}
+          </p>
+          {admin && (
+            <Link className="button primary" to="/admin/items/new">
+              Add product
+            </Link>
+          )}
+        </div>
+      )}
       <div className="catalog-pagination">
         <button
           className="button secondary"
@@ -360,5 +374,25 @@ export function Catalog({
         </button>
       </div>
     </div>
+  );
+}
+
+export function UserCatalog() {
+  return (
+    <Shell>
+      <main className="catalog-page">
+        <div className="catalog-heading">
+          <div>
+            <p className="eyebrow">Habitat / Collection</p>
+            <h1>Products for your spaces</h1>
+            <p>Explore finishes, check dimensions, find the right fit.</p>
+          </div>
+          <Link className="button secondary" to="/projects">
+            Your projects
+          </Link>
+        </div>
+        <Catalog />
+      </main>
+    </Shell>
   );
 }

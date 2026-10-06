@@ -19,7 +19,7 @@ export type DrawingInteraction = {
   onSelect: (id: string | null) => void;
   onDragStart: (
     id: string,
-    part: "start" | "end" | "wall" | "window",
+    part: "start" | "end" | "wall" | "window" | "item",
     p: Point,
   ) => void;
   onDragMove: (p: Point) => void;

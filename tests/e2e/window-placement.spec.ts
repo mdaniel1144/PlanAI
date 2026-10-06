@@ -159,7 +159,7 @@ test("hover, fit, lock, sill/height, save/reload and space elevation changes pre
   await expect(ghost(page)).toHaveAttribute("data-valid", "false");
   await expect(ghost(page).locator("rect").last()).toHaveAttribute(
     "stroke",
-    "#be4848",
+    "var(--error)",
   );
   const hoveringPosition = await ghost(page).getAttribute("data-position");
   await click(page, 5, 0);

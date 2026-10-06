@@ -1,53 +1,32 @@
-import { useUnits } from "../../units/useUnits";
+import { stages, stepIds } from "./studio-steps";
+import { FieldError } from "./StudioFields";
+import { Review } from "./Review";
 import { Dimensions } from "./Dimensions";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Shell } from "../../components/Layout";
-import { formatPrice, type Item, type SetupStep } from "@habitat/domain";
-import { moneyInput, optionalString, FormInputError } from "./forms";
+import { type Item } from "@habitat/domain";
+import { optionalString, FormInputError } from "./forms";
 import { ApiError } from "../../api/client";
 import { catalogClient } from "./api";
 import { Catalog } from "./Catalog";
 import { ProductImage } from "./ProductImage";
 import { AdvancedAppearance } from "./AdvancedAppearance";
-import type { ColorTarget } from "./ModelPreview";
-const ModelPreview = lazy(() => import("./ModelPreview"));
-const stages = [
-  "Product information",
-  "3D model",
-  "Dimensions & orientation",
-  "Select color parts",
-  "Available colors",
-  "Price & SKU",
-  "Review & publish",
-];
-const stepIds: SetupStep[] = [
-  "INFORMATION",
-  "MODEL",
-  "DIMENSIONS",
-  "COLOR_TARGETS",
-  "COLORS",
-  "PRICING",
-  "REVIEW",
-];
-const values = (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  return new FormData(e.currentTarget);
-};
-const text = (d: FormData, k: string) => String(d.get(k) ?? "");
+import { Colors } from "./Colors";
+import { Pricing } from "./Pricing";
+import { ProductStudioShell, StudioSplit, StudioEmpty } from "./Studio";
+import { values, text } from "./studio-forms";
+import ModelPreview from "./LazyModelPreview";
 export function AdminItems() {
   return (
     <Shell>
       <main className="catalog-page">
         <div className="catalog-heading">
-          <h1>Items</h1>
+          <div>
+            <p className="eyebrow">Habitat / Collection</p>
+            <h1>Item library</h1>
+            <p>Considered products. Ready for your next space.</p>
+          </div>
           <Link className="button" to="/admin/items/new">
             + Add Item
           </Link>
@@ -58,7 +37,6 @@ export function AdminItems() {
   );
 }
 export function AdminItemEditor() {
-  const units = useUnits();
   const { itemId } = useParams(),
     navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null),
@@ -182,16 +160,16 @@ export function AdminItemEditor() {
   const asset = item?.assets.find((a) => a.id === item.baseModelAssetId);
   return (
     <Shell>
-      <main className="catalog-page">
-        <Link to="/admin/items">← Items</Link>
-        <h1>{item?.name ?? "Add Item"}</h1>
-        <p>
-          {item
-            ? `${item.status} · Used in ${item.usageCount} project instances`
-            : "One product, fixed dimensions, available colors."}
-        </p>
-        {item && (
-          <div id="product-image">
+      <ProductStudioShell
+        item={item}
+        stage={stage}
+        busy={busy}
+        unsaved={unsaved}
+        message={message}
+        error={error}
+        go={go}
+        image={
+          item ? (
             <ProductImage
               item={item}
               disabled={busy}
@@ -208,27 +186,9 @@ export function AdminItemEditor() {
                 return true;
               }}
             />
-          </div>
-        )}
-        <nav className="item-stages" aria-label="Item setup">
-          {stages.map((s, i) => (
-            <button
-              key={s}
-              aria-label={`${i + 1}. ${s}`}
-              disabled={
-                busy ||
-                (!item && i !== 0) ||
-                (!!item?.setup && !item.setup.steps[i].accessible)
-              }
-              className={stage === i ? "selected" : ""}
-              onClick={() => {
-                go(i);
-              }}
-            >
-              {i + 1}. {s} {item?.setup?.steps[i].complete ? "✓" : ""}
-            </button>
-          ))}
-        </nav>
+          ) : null
+        }
+      >
         {error && (
           <p role="alert" className="item-error">
             {error}
@@ -241,8 +201,6 @@ export function AdminItemEditor() {
             ))}
           </ul>
         )}
-        {message && <p role="status">{message}</p>}
-        {busy && <p role="status">Saving {stages[stage].toLowerCase()}…</p>}
         {unsaved && (
           <p>
             Unsaved changes.{" "}
@@ -258,7 +216,10 @@ export function AdminItemEditor() {
             </button>
           </p>
         )}
-        <section className="item-editor-panel" aria-busy={busy}>
+        <section
+          className={`item-editor-panel studio-stage-${stage}`}
+          aria-busy={busy}
+        >
           <h2>{stages[stage]}</h2>
           <fieldset
             key={`${stage}:${formVersion}`}
@@ -271,10 +232,21 @@ export function AdminItemEditor() {
             }}
           >
             {stage === 0 && (
-              <>
+              <StudioSplit
+                viewer={
+                  item?.baseModelAssetId ? (
+                    <ModelPreview
+                      item={item}
+                      variant={item.defaultColor ?? undefined}
+                    />
+                  ) : (
+                    <StudioEmpty />
+                  )
+                }
+              >
                 <form
                   key={item?.updatedAt ?? "new"}
-                  className="item-form"
+                  className="item-form product-information-form"
                   onSubmit={(e) => {
                     const d = values(e);
                     void perform(async () => {
@@ -302,7 +274,7 @@ export function AdminItemEditor() {
                     />
                     <FieldError field="name" issues={issues} />
                   </label>
-                  <label>
+                  <label className="product-description">
                     Description
                     <textarea
                       name="description"
@@ -356,35 +328,73 @@ export function AdminItemEditor() {
                     {item ? "Save information" : "Create draft"}
                   </button>
                 </form>
-                <div className="taxonomy-forms">
-                  {(["brands", "categories"] as const).map((kind) => (
-                    <form
-                      key={kind}
-                      onSubmit={(e) => {
-                        const d = values(e);
-                        void taxonomy(kind, text(d, "name"));
-                        e.currentTarget.reset();
-                      }}
-                    >
-                      <label>
-                        New {kind === "brands" ? "brand" : "category"}
-                        <input name="name" required />
-                      </label>
-                      <button className="button secondary">
-                        Add {kind === "brands" ? "brand" : "category"}
-                      </button>
-                    </form>
-                  ))}
-                </div>
-              </>
+                <details className="taxonomy-disclosure">
+                  <summary>Manage brands & categories</summary>
+                  <div className="taxonomy-forms">
+                    {(["brands", "categories"] as const).map((kind) => (
+                      <form
+                        key={kind}
+                        onSubmit={(e) => {
+                          const d = values(e);
+                          void taxonomy(kind, text(d, "name"));
+                          e.currentTarget.reset();
+                        }}
+                      >
+                        <label>
+                          New {kind === "brands" ? "brand" : "category"}
+                          <input name="name" required />
+                        </label>
+                        <button className="button secondary">
+                          Add {kind === "brands" ? "brand" : "category"}
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                </details>
+              </StudioSplit>
             )}
             {item && stage === 1 && (
-              <>
+              <StudioSplit
+                viewer={
+                  asset ? (
+                    <ModelPreview item={item} />
+                  ) : (
+                    <div
+                      className="model-dropzone"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!busy && e.dataTransfer.files[0])
+                          upload("model", e.dataTransfer.files[0]);
+                      }}
+                    >
+                      <StudioEmpty
+                        title="Drop your GLB here"
+                        detail="One model. Every detail of your product."
+                      />
+                      <label className="button">
+                        Choose file
+                        <input
+                          aria-label="Upload GLB"
+                          type="file"
+                          accept=".glb"
+                          disabled={busy}
+                          onChange={(e) => {
+                            if (e.target.files?.[0])
+                              upload("model", e.target.files[0]);
+                          }}
+                        />
+                      </label>
+                      <p>GLB only · Maximum 50 MB by default</p>
+                    </div>
+                  )
+                }
+              >
                 <p>
                   Upload this product's GLB. A different physical size is a
                   separate Item.
                 </p>
-                {(!asset || !item.usageCount) && (
+                {asset && !item.usageCount && (
                   <label>
                     {asset ? "Replace model" : "Upload GLB"}
                     <input
@@ -413,16 +423,41 @@ export function AdminItemEditor() {
                         ? "This model is used in a project and cannot be replaced."
                         : "Replacing the model resets dimensions and color parts. Saved colors are retained; confirm their parts again."}
                     </p>
-                    <Suspense fallback={<p>Loading model…</p>}>
-                      <ModelPreview item={item} />
-                    </Suspense>
+                    <dl className="model-facts">
+                      <div>
+                        <dt>Meshes</dt>
+                        <dd>{asset.inspection?.meshes.length}</dd>
+                      </div>
+                      <div>
+                        <dt>Materials</dt>
+                        <dd>{asset.inspection?.materials.length}</dd>
+                      </div>
+                      <div>
+                        <dt>UV mapping</dt>
+                        <dd>
+                          {asset.inspection?.meshes.every((m) =>
+                            m.primitives.every((p) => p.hasUV),
+                          )
+                            ? "Available"
+                            : "Partial / unavailable"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Animation</dt>
+                        <dd>
+                          {asset.inspection?.animations.length
+                            ? "Present"
+                            : "None"}
+                        </dd>
+                      </div>
+                    </dl>
                     <details>
                       <summary>Advanced Model Inspection</summary>
                       <pre>{JSON.stringify(asset.inspection, null, 2)}</pre>
                     </details>
                   </>
                 )}
-              </>
+              </StudioSplit>
             )}
             {item && stage === 2 && (
               <Dimensions
@@ -431,6 +466,7 @@ export function AdminItemEditor() {
                 perform={perform}
                 issues={issues}
                 busy={busy}
+                onDirty={() => setUnsaved(true)}
               />
             )}
             {item && (stage === 3 || stage === 4) && (
@@ -442,6 +478,8 @@ export function AdminItemEditor() {
                   issues={issues}
                   busy={busy}
                   targetsOnly={stage === 3}
+                  onDiscard={() => setUnsaved(false)}
+                  error={error}
                   onDirty={() => setUnsaved(true)}
                 />
                 <AdvancedAppearance
@@ -453,125 +491,29 @@ export function AdminItemEditor() {
               </>
             )}
             {item && stage === 5 && (
-              <Pricing
-                key={item.updatedAt}
-                item={item}
-                perform={perform}
-                issues={issues}
-                busy={busy}
-              />
-            )}
-            {item && stage === 6 && (
-              <>
-                <p>
-                  {item.brandName} · {item.categoryName}
-                </p>
-                <p>
-                  {item.width != null
-                    ? `${units.value(item.width)} × ${units.value(item.depth!)} × ${units.value(item.height!)} ${units.label}`
-                    : "Confirm dimensions"}
-                </p>
-                <p>
-                  GLB:{" "}
-                  {asset?.calibration && item.dimensions
-                    ? "Ready"
-                    : "Confirm real dimensions"}
-                </p>
-                <p>
-                  {item.basePriceMinor === null
-                    ? "Set base price"
-                    : `Base ${formatPrice(item.basePriceMinor, item.currency)}`}{" "}
-                  · {item.itemCode}
-                </p>
-                <p>
-                  Available colors:{" "}
-                  {item.colors
-                    .filter((c) => c.status === "ACTIVE")
-                    .map((c) => c.name)
-                    .join(", ")}
-                </p>
-                <Suspense fallback={<p>Loading preview…</p>}>
+              <StudioSplit
+                viewer={
                   <ModelPreview
                     item={item}
                     variant={item.defaultColor ?? undefined}
                   />
-                </Suspense>
-                <p>
-                  Default color:{" "}
-                  {item.defaultColor?.name ??
-                    "Add an active color in Available colors."}
-                </p>
-                <ul aria-label="Publication checklist">
-                  {item.setup?.steps.slice(0, 6).map((step, i) => (
-                    <li key={step.id}>
-                      {step.complete ? "Ready" : "Incomplete"}: {stages[i]}
-                    </li>
-                  ))}
-                </ul>
-                {item.setup?.blockingIssues.map((issue) => (
-                  <p key={issue.code + issue.message} className="item-error">
-                    {issue.message}{" "}
-                    <button
-                      onClick={() =>
-                        issue.step === "THUMBNAIL"
-                          ? document
-                              .getElementById("product-image")
-                              ?.scrollIntoView({ behavior: "smooth" })
-                          : go(stepIds.indexOf(issue.step))
-                      }
-                    >
-                      Open{" "}
-                      {issue.step === "THUMBNAIL"
-                        ? "Product image"
-                        : stages[stepIds.indexOf(issue.step)]}
-                    </button>
-                  </p>
-                ))}
-                <button
-                  className="button"
-                  disabled={
-                    busy || !item.setup?.publishable || item.status === "ACTIVE"
-                  }
-                  onClick={() =>
-                    void perform(
-                      () => catalogClient.save(item.id, { status: "ACTIVE" }),
-                      "Product published",
-                    )
-                  }
-                >
-                  {item.status === "ACTIVE" ? "Published" : "Publish product"}
-                </button>
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void perform(
-                      () => catalogClient.save(item.id, { status: "DRAFT" }),
-                      "Draft saved",
-                    )
-                  }
-                >
-                  Save draft
-                </button>
-                {item.status === "ACTIVE" && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(
-                        () =>
-                          catalogClient.save(item.id, { status: "INACTIVE" }),
-                        "Product hidden",
-                      )
-                    }
-                  >
-                    Hide product
-                  </button>
-                )}
-              </>
+                }
+              >
+                <Pricing
+                  key={item.updatedAt}
+                  item={item}
+                  perform={perform}
+                  issues={issues}
+                  busy={busy}
+                />
+              </StudioSplit>
+            )}
+            {item && stage === 6 && (
+              <Review item={item} perform={perform} busy={busy} go={go} />
             )}
           </fieldset>
         </section>
-        <div className="catalog-pagination">
+        <div className="catalog-pagination studio-footer">
           <button
             className="button secondary"
             disabled={busy || stage === 0}
@@ -593,677 +535,7 @@ export function AdminItemEditor() {
             Next step
           </button>
         </div>
-      </main>
+      </ProductStudioShell>
     </Shell>
   );
-}
-type StepProps = {
-  item: Item;
-  perform: (
-    a: () => Promise<Item>,
-    success?: string,
-    keepUnsaved?: boolean,
-  ) => Promise<void>;
-  issues?: { field: string; message: string }[];
-  busy: boolean;
-};
-
-function Colors({
-  item,
-  perform,
-  busy,
-  targetsOnly,
-  onDirty,
-  issues,
-}: StepProps & { targetsOnly: boolean; onDirty: () => void }) {
-  const slot = item.slots.find((s) => s.name === "PRODUCT_COLOR"),
-    saved = item.bindings.filter((b) => b.slotId === slot?.id);
-  const [targets, setTargets] = useState<ColorTarget[]>(
-      saved.map((b) => ({
-        materialIndex: b.materialIndex,
-        nodeIndex: b.nodeIndex,
-      })),
-    ),
-    [selecting, setSelecting] = useState(targetsOnly && !saved.length),
-    [editId, setEditId] = useState(""),
-    [previewId, setPreviewId] = useState(item.defaultVariantId ?? ""),
-    [name, setName] = useState(""),
-    [baseColor, setBaseColor] = useState("#31577a"),
-    [textureId, setTextureId] = useState(""),
-    [editing, setEditing] = useState(false),
-    [dirty, setDirty] = useState(false);
-  const edit = item.colors.find((c) => c.id === editId),
-    preview =
-      item.colors.find((c) => c.id === previewId) ??
-      item.defaultColor ??
-      undefined;
-  const previewOverrides = slot
-    ? [
-        ...(edit?.overrides ?? []).filter((o) => o.slotId !== slot.id),
-        {
-          slotId: slot.id,
-          materialId: textureId ? "live-texture" : null,
-          baseColor: textureId ? null : baseColor,
-        },
-      ]
-    : [];
-  const live =
-    editing && (!edit || dirty)
-      ? {
-          ...(edit ??
-            item.colors[0] ?? {
-              id: "live",
-              itemId: item.id,
-              name,
-              sku: null,
-              priceMinor: 0,
-              currency: item.currency,
-              width: item.width!,
-              depth: item.depth!,
-              height: item.height!,
-              modelAssetId: null,
-              thumbnailAssetId: null,
-              status: "ACTIVE" as const,
-              finish: null,
-              createdAt: "",
-              updatedAt: "",
-              priceOverrideMinor: null,
-              currencyOverride: null,
-              effectiveSku: null,
-            }),
-          color: baseColor,
-          overrides: previewOverrides,
-        }
-      : preview;
-  const previewItem =
-    editing && textureId
-      ? {
-          ...item,
-          materials: [
-            ...item.materials,
-            {
-              id: "live-texture",
-              itemId: item.id,
-              name: "Preview",
-              baseColor,
-              roughness: 0.8,
-              metalness: 0,
-              opacity: 1,
-              textures: [
-                { channel: "BASE_COLOR" as const, assetId: textureId },
-              ],
-              createdAt: "",
-              updatedAt: "",
-            },
-          ],
-        }
-      : item;
-  const inspection = item.assets.find(
-    (a) => a.id === item.baseModelAssetId,
-  )?.inspection;
-  const lacksUV = (targetsOnly ? targets : saved).some((t) =>
-    inspection?.meshes
-      .filter(
-        (m) =>
-          t.nodeIndex === null ||
-          m.index ===
-            inspection.nodes.find((n) => n.index === t.nodeIndex)?.mesh,
-      )
-      .some((m) =>
-        m.primitives.some(
-          (p) => p.materialIndex === t.materialIndex && !p.hasUV,
-        ),
-      ),
-  );
-  if (!item.dimensions)
-    return <p>Confirm the real product dimensions first.</p>;
-  return (
-    <>
-      {targetsOnly && (
-        <>
-          <h3>Product color parts</h3>
-          {lacksUV && (
-            <p>
-              One selected part has no usable UV mapping. You can still use
-              solid colors; texture images need UV mapping.
-            </p>
-          )}
-          <p>
-            Click all model parts whose color changes between product colors.
-            Click a selected part again to remove it.
-          </p>
-          <p>
-            Choose at least one part and add an active color before publishing.
-            Unselected parts keep their original appearance.
-          </p>
-        </>
-      )}
-      <Suspense fallback={<p>Loading preview…</p>}>
-        <ModelPreview
-          item={previewItem}
-          variant={selecting ? undefined : live}
-          targets={selecting ? targets : undefined}
-          onTarget={
-            selecting && !busy
-              ? (target) => {
-                  onDirty();
-                  setTargets((old) =>
-                    old.some(
-                      (t) =>
-                        t.materialIndex === target.materialIndex &&
-                        t.nodeIndex === target.nodeIndex,
-                    )
-                      ? old.filter(
-                          (t) =>
-                            t.materialIndex !== target.materialIndex ||
-                            t.nodeIndex !== target.nodeIndex,
-                        )
-                      : [...old, target],
-                  );
-                }
-              : undefined
-          }
-        />
-      </Suspense>
-      {targetsOnly &&
-        (selecting ? (
-          <>
-            <p>Selected: {targets.length} regions</p>
-            <ul>
-              {targets.map((t) => (
-                <li key={`${t.nodeIndex}:${t.materialIndex}`}>
-                  {item.assets
-                    .find((a) => a.id === item.baseModelAssetId)
-                    ?.inspection?.nodes.find((n) => n.index === t.nodeIndex)
-                    ?.name ?? "Material region"}{" "}
-                  <button
-                    onClick={() => {
-                      setTargets(targets.filter((v) => v !== t));
-                      onDirty();
-                    }}
-                  >
-                    Remove selection
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              disabled={busy}
-              onClick={() => {
-                setTargets([]);
-                onDirty();
-              }}
-            >
-              Reset selection
-            </button>
-            <button
-              className="button"
-              disabled={busy || !targets.length || !!item.usageCount}
-              onClick={() =>
-                void perform(async () => {
-                  const result = await catalogClient.action(
-                    item.id,
-                    "color-targets",
-                    { targets },
-                  );
-                  setSelecting(false);
-                  return result;
-                })
-              }
-            >
-              Confirm color parts
-            </button>
-          </>
-        ) : (
-          <button
-            className="button secondary"
-            disabled={!!item.usageCount}
-            onClick={() => setSelecting(true)}
-          >
-            Edit color parts
-          </button>
-        ))}
-      {targetsOnly && (
-        <p>
-          {saved.length
-            ? `${saved.length} color regions saved.`
-            : "No color regions saved yet."}
-        </p>
-      )}
-      {!targetsOnly && (
-        <>
-          {lacksUV && (
-            <p>
-              Texture images cannot be applied to these parts because UV mapping
-              is missing. Choose a solid color.
-            </p>
-          )}
-          <div className="catalog-grid">
-            {item.colors.map((c) => (
-              <article key={c.id} className="color-card">
-                <span
-                  className="color-swatch"
-                  style={{ background: c.color ?? "#ddd" }}
-                />
-                <h4>{c.name}</h4>
-                {item.status === "ACTIVE" &&
-                  c.status === "ACTIVE" &&
-                  item.colors.filter((v) => v.status === "ACTIVE").length ===
-                    1 && (
-                    <p>A published product needs at least one active color.</p>
-                  )}
-                {c.id === item.defaultVariantId ? (
-                  <strong>Default color</strong>
-                ) : (
-                  c.status === "ACTIVE" && (
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void perform(() =>
-                          catalogClient.save(item.id, {
-                            defaultVariantId: c.id,
-                          }),
-                        )
-                      }
-                    >
-                      Set as Default
-                    </button>
-                  )
-                )}
-                <p>
-                  {c.status === "ACTIVE" ? "Active" : "Inactive"} ·{" "}
-                  {formatPrice(c.priceMinor, c.currency)}
-                </p>
-                <p>
-                  {c.status === "INACTIVE"
-                    ? "Inactive"
-                    : (c.effectiveSku ?? "Uses product code")}
-                </p>
-                <p>
-                  {item.samePriceForAllColors || c.priceOverrideMinor === null
-                    ? "Uses base price"
-                    : formatPrice(c.priceMinor, c.currency)}
-                </p>
-                <button
-                  onClick={() => {
-                    setPreviewId(c.id);
-                    setEditing(false);
-                    setSelecting(false);
-                  }}
-                >
-                  Preview
-                </button>
-                <button
-                  onClick={() => {
-                    setEditId(c.id);
-                    setPreviewId(c.id);
-                    setName(c.name);
-                    setBaseColor(
-                      c.color?.startsWith("#") ? c.color : "#31577a",
-                    );
-                    setTextureId(
-                      item.materials
-                        .find(
-                          (m) =>
-                            m.id ===
-                            c.overrides.find((o) => o.slotId === slot?.id)
-                              ?.materialId,
-                        )
-                        ?.textures.find((t) => t.channel === "BASE_COLOR")
-                        ?.assetId ?? "",
-                    );
-                    setEditing(true);
-                    setDirty(false);
-                    setSelecting(false);
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  disabled={
-                    busy ||
-                    (item.status === "ACTIVE" &&
-                      c.status === "ACTIVE" &&
-                      item.colors.filter((v) => v.status === "ACTIVE")
-                        .length === 1)
-                  }
-                  onClick={() =>
-                    void perform(() =>
-                      catalogClient.action(
-                        item.id,
-                        `colors/${c.id}`,
-                        {
-                          status: c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE",
-                        },
-                        "PATCH",
-                      ),
-                    )
-                  }
-                >
-                  {c.status === "ACTIVE" ? "Deactivate" : "Restore"}
-                </button>
-              </article>
-            ))}
-          </div>
-          <button
-            className="button secondary"
-            disabled={busy || !saved.length}
-            onClick={() => {
-              setEditId("");
-              setName("");
-              setBaseColor("#31577a");
-              setTextureId("");
-              setEditing(true);
-              setDirty(true);
-              setSelecting(false);
-            }}
-          >
-            + Add Color
-          </button>
-          {editing && (
-            <form
-              key={editId || "new-color"}
-              className="item-form"
-              onSubmit={(e) => {
-                const data = values(e);
-                void perform(async () => {
-                  const result = await catalogClient.action(
-                    item.id,
-                    editId ? `colors/${editId}` : "colors",
-                    {
-                      name,
-                      sku: optionalString(data.get("sku")),
-                      ...(!item.samePriceForAllColors
-                        ? {
-                            priceMinor: moneyInput(
-                              data.get("price"),
-                              data.get("priceCurrency"),
-                            ),
-                            currency: optionalString(data.get("price"))
-                              ? String(data.get("priceCurrency"))
-                                  .trim()
-                                  .toUpperCase()
-                              : null,
-                          }
-                        : {}),
-                      status: edit?.status ?? "ACTIVE",
-                      ...(dirty
-                        ? { baseColor, textureAssetId: textureId || null }
-                        : {}),
-                    },
-                    editId ? "PATCH" : "POST",
-                  );
-                  setEditing(false);
-                  setPreviewId(
-                    editId || result.colors[result.colors.length - 1].id,
-                  );
-                  return result;
-                });
-              }}
-            >
-              <label>
-                Color name
-                <input
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-              <label>
-                Color
-                <input
-                  type="color"
-                  value={baseColor}
-                  onChange={(e) => {
-                    setBaseColor(e.target.value);
-                    setDirty(true);
-                  }}
-                />
-              </label>
-              <p>
-                Appearance: {textureId ? "Texture image" : "Solid color"}.
-                Texture images require UV mapping on every selected part.
-              </p>
-              <label>
-                Texture (optional)
-                <select
-                  disabled={lacksUV}
-                  value={textureId}
-                  onChange={(e) => {
-                    setTextureId(e.target.value);
-                    setDirty(true);
-                  }}
-                >
-                  <option value="">Solid color</option>
-                  {item.assets
-                    .filter((a) => a.type === "TEXTURE")
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.fileName}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                Upload color texture
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  disabled={busy || lacksUV}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file)
-                      void perform(
-                        async () => {
-                          const a = await catalogClient.upload(
-                            item.id,
-                            "textures",
-                            file,
-                          );
-                          setTextureId(a.id);
-                          setDirty(true);
-                          return catalogClient.item(item.id, true);
-                        },
-                        "Texture uploaded; save the color to apply it.",
-                        true,
-                      );
-                  }}
-                />
-              </label>
-              <label>
-                Color SKU (optional)
-                <input
-                  name="sku"
-                  defaultValue={edit?.sku ?? ""}
-                  placeholder="Uses product code"
-                />
-                <FieldError field="sku" issues={issues} />
-              </label>
-              {!item.samePriceForAllColors && (
-                <>
-                  <label>
-                    Color price override (optional)
-                    <input
-                      name="price"
-                      inputMode="decimal"
-                      defaultValue={
-                        edit?.priceOverrideMinor != null
-                          ? decimal(
-                              edit.priceOverrideMinor,
-                              edit.currencyOverride ?? item.currency,
-                            )
-                          : ""
-                      }
-                      placeholder="Uses base price"
-                    />
-                  </label>
-                  <label>
-                    Color price currency
-                    <input
-                      name="priceCurrency"
-                      defaultValue={edit?.currencyOverride ?? item.currency}
-                      required
-                    />
-                  </label>
-                </>
-              )}
-              <button className="button" disabled={busy}>
-                {editId ? "Save color" : "Create color"}
-              </button>
-            </form>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-function Pricing({ item, perform, busy, issues }: StepProps) {
-  const [same, setSame] = useState(item.samePriceForAllColors);
-  return (
-    <>
-      <form
-        className="item-form"
-        onSubmit={(e) => {
-          const d = values(e);
-          void perform(() =>
-            catalogClient.save(item.id, {
-              basePriceMinor: moneyInput(text(d, "price"), text(d, "currency")),
-              currency: text(d, "currency").trim().toUpperCase(),
-              itemCode: optionalString(text(d, "code")),
-              samePriceForAllColors: same,
-            }),
-          );
-        }}
-      >
-        <label>
-          Base price
-          <input
-            name="price"
-            aria-label="Base price"
-            required
-            inputMode="decimal"
-            defaultValue={
-              item.basePriceMinor === null
-                ? ""
-                : decimal(item.basePriceMinor, item.currency)
-            }
-          />
-          <FieldError field="basePriceMinor" issues={issues} />
-        </label>
-        <label>
-          Currency
-          <input
-            aria-label="Currency"
-            name="currency"
-            required
-            defaultValue={item.currency}
-          />
-          <FieldError field="currency" issues={issues} />
-        </label>
-        <label>
-          Base product code / SKU
-          <input name="code" defaultValue={item.itemCode ?? ""} />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={same}
-            onChange={(e) => setSame(e.target.checked)}
-          />{" "}
-          Same price for all colors
-        </label>
-        <button className="button" disabled={busy}>
-          Save base price
-        </button>
-      </form>
-      {item.colors.map((c) => (
-        <form
-          key={`${c.id}:${c.updatedAt}`}
-          className="item-form"
-          onSubmit={(e) => {
-            const d = values(e);
-            void perform(() =>
-              catalogClient.action(
-                item.id,
-                `colors/${c.id}`,
-                {
-                  sku: optionalString(text(d, "sku")),
-                  ...(!item.samePriceForAllColors
-                    ? {
-                        priceMinor: text(d, "price")
-                          ? moneyInput(text(d, "price"), text(d, "currency"))
-                          : null,
-                        currency: text(d, "price") ? text(d, "currency") : null,
-                      }
-                    : {}),
-                },
-                "PATCH",
-              ),
-            );
-          }}
-        >
-          <h3>{c.name}</h3>
-          <label>
-            SKU override — {c.name}
-            <input
-              name="sku"
-              defaultValue={c.sku ?? ""}
-              placeholder={item.itemCode ?? "Optional"}
-            />
-          </label>
-          {!item.samePriceForAllColors && (
-            <>
-              <label>
-                Price override — {c.name}
-                <input
-                  name="price"
-                  inputMode="decimal"
-                  defaultValue={
-                    c.priceOverrideMinor === null
-                      ? ""
-                      : decimal(
-                          c.priceOverrideMinor,
-                          c.currencyOverride ?? item.currency,
-                        )
-                  }
-                  placeholder="Uses base price"
-                />
-              </label>
-              <label>
-                Currency — {c.name}
-                <input
-                  name="currency"
-                  defaultValue={c.currencyOverride ?? item.currency}
-                />
-              </label>
-            </>
-          )}
-          <button className="button secondary" disabled={busy}>
-            Save {c.name} pricing
-          </button>
-        </form>
-      ))}
-    </>
-  );
-}
-function FieldError({
-  field,
-  issues,
-}: {
-  field: string;
-  issues?: { field: string; message: string }[];
-}) {
-  const issue = issues?.find(
-    (i) =>
-      i.field === field || (field === "basePriceMinor" && i.field === "price"),
-  );
-  return issue ? <small className="item-error">{issue.message}</small> : null;
-}
-function decimal(minor: number, currency: string) {
-  const digits =
-    new Intl.NumberFormat("en", {
-      style: "currency",
-      currency,
-    }).resolvedOptions().maximumFractionDigits ?? 0;
-  return (minor / 10 ** digits).toFixed(digits);
 }

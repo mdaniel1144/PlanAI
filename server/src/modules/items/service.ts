@@ -79,14 +79,14 @@ export class CatalogService {
   get(id: string, card = false): Item {
     if (card) {
       const item = this.get(id);
-      const colors = item.variants
-        .filter((v) => v.id === item.defaultVariantId)
-        .map((v) => ({ ...v, overrides: [] }));
+      // Cards need every finish for accurate swatches/counts, without loading model details.
+      const colors = item.variants.map((v) => ({ ...v, overrides: [] }));
       return {
         ...item,
         variants: colors,
         colors,
-        defaultColor: colors[0] ?? null,
+        defaultColor:
+          colors.find((v) => v.id === item.defaultVariantId) ?? null,
         assets: [],
         materials: [],
         slots: [],
@@ -458,6 +458,8 @@ export class CatalogService {
     ]);
     return {
       ...item,
+      // Verification evidence includes an internal actor ID, not runtime data.
+      dimensionVerification: undefined,
       usageCount: 0,
       variants,
       colors: variants,
@@ -516,9 +518,9 @@ export class CatalogService {
       }
     if (q.search) {
       where.push(
-        `(instr(lower(i.name),lower(?))>0 OR instr(lower(COALESCE(i.item_code,'')),lower(?))>0 OR EXISTS(SELECT 1 FROM item_variants sv WHERE sv.item_id=i.id AND instr(lower(COALESCE(sv.color_sku,i.item_code)),lower(?))>0 ${admin ? "" : "AND sv.status='ACTIVE'"}))`,
+        `(instr(lower(i.name),lower(?))>0 OR instr(lower(COALESCE(i.item_code,'')),lower(?))>0 OR instr(lower(c.name),lower(?))>0 OR EXISTS(SELECT 1 FROM item_variants sv WHERE sv.item_id=i.id AND instr(lower(COALESCE(sv.color_sku,i.item_code)),lower(?))>0 ${admin ? "" : "AND sv.status='ACTIVE'"}))`,
       );
-      args.push(q.search, q.search, q.search);
+      args.push(q.search, q.search, q.search, q.search);
     }
     if (
       q.minPrice !== undefined ||
@@ -797,6 +799,19 @@ export class CatalogService {
           409,
         );
       const variantId = id ?? randomUUID();
+
+      if (
+        previous &&
+        this.db
+          .prepare("SELECT 1 FROM project_item_instances WHERE variant_id=?")
+          .get(id!) &&
+        JSON.stringify(parsed.overrides) !== JSON.stringify(previous.overrides)
+      )
+        fail(
+          "ITEM_IN_USE",
+          "This color is used in a project. Add a new color to change its appearance.",
+          409,
+        );
 
       if (parsed.currency && parsed.priceMinor === null)
         fail(
@@ -1160,6 +1175,21 @@ export class CatalogService {
         ...(previous ? fields(materialInput, previous) : {}),
         ...z.record(z.string(), z.unknown()).parse(input),
       });
+      if (
+        previous &&
+        this.db
+          .prepare(
+            "SELECT 1 FROM variant_material_overrides o JOIN project_item_instances p ON p.variant_id=o.variant_id WHERE o.material_id=?",
+          )
+          .get(id!) &&
+        JSON.stringify(m) !==
+          JSON.stringify(materialInput.parse(fields(materialInput, previous)))
+      )
+        fail(
+          "ITEM_IN_USE",
+          "Materials used in projects are locked. Create a new material instead.",
+          409,
+        );
       const channels = new Set<string>();
       for (const t of m.textures) {
         this.asset(item, t.assetId, "TEXTURE");
@@ -1249,6 +1279,14 @@ export class CatalogService {
           item = this.get(i.itemId);
           cache.set(i.itemId, item);
         }
+        const pinned = old?.modelAssetId ?? item.baseModelAssetId;
+        if (!pinned || (i.modelAssetId && i.modelAssetId !== pinned))
+          fail(
+            "PROJECT_ITEM_VARIANT_INVALID",
+            "The product model changed. Select the item again; existing placements cannot change models.",
+            409,
+          );
+        input.modelAssetId = pinned;
         const variant = item.variants.find((v) => v.id === i.variantId);
         if (!variant)
           fail(
@@ -1260,6 +1298,7 @@ export class CatalogService {
           !(old && old.itemId === i.itemId && old.variantId === i.variantId)
         )
           fail("ITEM_INACTIVE", "Inactive Items cannot be newly placed");
+        if (!old || old.variantId !== i.variantId) this.assertPublishable(item);
         this.validateVariant(item, variant, true);
         const room = i.spaceId
           ? floor.rooms.find((r) => r.id === i.spaceId)

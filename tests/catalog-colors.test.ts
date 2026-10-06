@@ -76,6 +76,14 @@ it("keeps real sizes in separate Items and lets three colors inherit price and p
     expect(small.width).toBe(2.2);
     expect(large.width).toBe(2.6);
     expect(small.colors).toHaveLength(3);
+    const card = catalog.get(small.id, true);
+    expect(card.colors).toHaveLength(3);
+    expect(card.defaultColor?.id).toBe(small.defaultVariantId);
+    expect(card.colors.every((color) => color.overrides.length === 0)).toBe(
+      true,
+    );
+    expect(card.assets).toEqual([]);
+    expect(card.materials).toEqual([]);
     expect(
       small.colors.every(
         (c) =>

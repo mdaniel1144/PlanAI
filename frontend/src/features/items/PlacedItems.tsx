@@ -5,7 +5,9 @@ export function PlacedItems({
   items,
   onSelect,
   onError,
+  placing = false,
 }: {
+  placing?: boolean;
   floor: Floor;
   items: Item[];
   onSelect: (id: string | null) => void;
@@ -28,11 +30,21 @@ export function PlacedItems({
             position={[instance.positionX, elevation, -instance.positionY]}
             rotation={[0, instance.rotation, 0]}
             onClick={(e) => {
+              if (placing) return;
               e.stopPropagation();
               onSelect(instance.id);
             }}
           >
-            <ItemModel item={item} variant={variant} onError={onError} />
+            <ItemModel
+              item={
+                instance.modelAssetId &&
+                instance.modelAssetId !== item.baseModelAssetId
+                  ? { ...item, baseModelAssetId: instance.modelAssetId }
+                  : item
+              }
+              variant={variant}
+              onError={onError}
+            />
           </group>
         );
       })}

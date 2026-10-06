@@ -2,6 +2,11 @@ import { verifiedDimensions } from "../dimension-fixture";
 import { test, expect } from "./fixtures";
 import { colorTargetGLB } from "../glb-fixture";
 import { readFileSync } from "node:fs";
+test.afterEach(async ({ request }) => {
+  await request.patch("/api/account/display", {
+    data: { lengthDisplayUnit: "M" },
+  });
+});
 test("admin creates and publishes one GLB with Blue, White and Green colors; user browses without management controls", async ({
   page,
 }) => {
@@ -45,6 +50,7 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
   await expect(page).toHaveURL(/\/projects$/);
   await page.goto("/admin/items");
   await page.getByRole("link", { name: "+ Add Item" }).click();
+  await page.getByText("Manage brands & categories", { exact: true }).click();
   await page.getByLabel("New brand", { exact: true }).fill("Example Co.");
   await page.getByRole("button", { name: "Add brand", exact: true }).click();
   await expect(
@@ -97,13 +103,9 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
   ).toBeVisible();
   const detected = page.getByText(/Oriented model axes/);
   const beforeOrientation = await detected.textContent();
-  await page
-    .getByRole("combobox", { name: "Product orientation", exact: true })
-    .selectOption("90");
+  await page.getByRole("radio", { name: "90°", exact: true }).check();
   await expect(detected).not.toHaveText(beforeOrientation!);
-  await page
-    .getByRole("combobox", { name: "Product orientation", exact: true })
-    .selectOption("0");
+  await page.getByRole("radio", { name: "0°", exact: true }).check();
   await page.getByLabel("Real width (cm)").fill("240");
   await page.getByLabel("Real depth (cm)").fill("95");
   await page.getByLabel("Real height (cm)").fill("82");
@@ -285,7 +287,9 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
       (el as HTMLButtonElement).click();
       (el as HTMLButtonElement).click();
     });
-  await expect(page.getByText(/ACTIVE · Used in/)).toBeVisible();
+  await expect(
+    page.locator(".quiet-status").getByText("active", { exact: true }),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Published", exact: true }),
@@ -322,6 +326,11 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
   await page.getByLabel("Search", { exact: true }).fill("X3213-Blue");
   await expect(page.getByRole("link", { name: /Sofa 123/ })).toBeVisible();
   expect(modelRequests).toBe(0);
+  await expect(
+    page
+      .getByRole("link", { name: /Sofa 123/ })
+      .getByText("3 colors", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByAltText("Sofa 123", { exact: true })).toHaveAttribute(
     "src",
     whiteThumb!,
@@ -355,34 +364,23 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
   const beforeCatalog = await (
     await page.request.get(`/api/items/${itemId}`)
   ).json();
+  await page.request.patch("/api/account/display", {
+    headers,
+    data: { lengthDisplayUnit: "CM" },
+  });
   await page.goto(`/projects/${project.id}/editor`);
-  await page.getByRole("button", { name: "Add Item", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "Item catalog" });
+  await page.getByRole("button", { name: "Items", exact: true }).click();
+  const drawer = page.getByRole("complementary", { name: "Items library" });
   await expect(drawer).toBeVisible();
-  await drawer.getByLabel("Search", { exact: true }).fill("Sofa 123");
-  await expect(
-    drawer.getByAltText("Sofa 123", { exact: true }),
-  ).toHaveAttribute("src", whiteThumb!);
+  await drawer.getByLabel("Search items", { exact: true }).fill("Sofa 123");
+  await expect(drawer.locator("img")).toHaveAttribute("src", whiteThumb!);
   expect(modelRequests).toBe(0);
-  await drawer.getByRole("button", { name: /Sofa 123/ }).click();
+  await expect(drawer.getByText("240 × 95 × 82 cm")).toBeVisible();
+  await drawer.getByLabel("Color for Sofa 123").selectOption({ label: "Blue" });
   await drawer
-    .getByRole("combobox", { name: "Color", exact: true })
-    .selectOption({ label: "Blue" });
-  await expect(drawer.locator("canvas")).toBeVisible();
-  await expect(drawer.getByText("2.40 × 0.95 × 0.82 m")).toBeVisible();
-  const detailLoads = modelRequests;
-  for (const color of ["White", "Green", "Blue"])
-    await drawer
-      .getByRole("combobox", { name: "Color", exact: true })
-      .selectOption({ label: color });
-  await expect(
-    drawer.locator(".item-preview").getByText("Model loaded", { exact: true }),
-  ).toBeVisible();
-  expect(modelRequests).toBe(detailLoads);
-  await drawer
-    .getByRole("button", { name: "Add to Project", exact: true })
+    .getByRole("button", { name: "Place Sofa 123", exact: true })
     .click();
-  await expect(page.getByText(/Choose a position on the plan/)).toBeVisible();
+  await expect(page.getByText(/Choose a position on the floor/)).toBeVisible();
   const plan = page.locator(".plan-svg");
   await plan.hover({ position: { x: 260, y: 220 } });
   await expect(page.locator(".item-ghost")).toBeVisible();
@@ -401,13 +399,16 @@ test("admin creates and publishes one GLB with Blue, White and Green colors; use
   await expect(page.locator("[data-item-instance]")).toHaveCount(1);
   await page.locator("[data-item-instance]").click();
   await expect(page.getByLabel("Rotation (degrees)")).toHaveValue("45");
-  const footprintBefore = await page
-    .locator("[data-item-instance] rect")
-    .evaluate((el) => ({
-      width: el.getAttribute("width"),
-      height: el.getAttribute("height"),
-    }));
-  expect(footprintBefore).toEqual({ width: "2.4", height: "0.95" });
+  const footprint = page.locator(
+    '[data-item-instance] polygon[data-representation="geometry-outline"]',
+  );
+  await expect(footprint).toBeVisible();
+  const footprintBefore = await footprint.evaluate((el) => {
+    const b = (el as SVGGraphicsElement).getBBox();
+    return { width: b.width, depth: b.height };
+  });
+  expect(footprintBefore.width).toBeCloseTo(2.4, 4);
+  expect(footprintBefore.depth).toBeCloseTo(0.95, 4);
   await expect(page.getByLabel(/Scale|Resize|Stretch/)).toHaveCount(0);
   await page.getByRole("button", { name: "3D model", exact: true }).click();
   await expect(page.locator(".three-view canvas")).toBeVisible();

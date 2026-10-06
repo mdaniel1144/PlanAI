@@ -47,7 +47,22 @@ export function Shell({
             <span>Workspace</span>
             <span className="slash">/</span>
             <FolderOpen size={14} />
-            <Link to={base}>{project?.name ?? "Your projects"}</Link>
+            <Link
+              to={
+                project
+                  ? base
+                  : location.pathname.includes("items")
+                    ? "/items"
+                    : base
+              }
+            >
+              {project?.name ??
+                (location.pathname.includes("items")
+                  ? "Product collection"
+                  : location.pathname.startsWith("/settings")
+                    ? "Settings"
+                    : "Your projects")}
+            </Link>
             <ChevronDown size={12} />
           </div>
           <div className="header-end" ref={setHeaderTarget} />
@@ -111,6 +126,16 @@ export function Shell({
                 <Blocks size={20} />
               </NavLink>
             )}
+            <NavLink
+              to="/items"
+              title="Product collection"
+              aria-label="Product collection"
+              className={({ isActive }) =>
+                isActive ? "rail-link active" : "rail-link"
+              }
+            >
+              <Layers3 size={20} />
+            </NavLink>
             <div className="rail-bottom">
               <Link
                 className="rail-link"

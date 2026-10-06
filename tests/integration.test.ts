@@ -34,7 +34,7 @@ describe("persistence and architectural authority", () => {
     expect(b.service.requireScene(s.id).floors[0].walls[0].height).toBe(3.2);
     expect(
       b.repo.db.sqlite.prepare("SELECT COUNT(*) AS n FROM migrations").get(),
-    ).toEqual({ n: 13 });
+    ).toEqual({ n: 16 });
   });
   it("keeps room semantics separate from boundary verification", () => {
     const { service } = setup(),

@@ -18,12 +18,16 @@ import { ProjectPage } from "./routes/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { NewProject } from "./pages/NewProject";
 import "./styles/App.css";
+import "./styles/Studio.css";
+import "./styles/Items.css";
+import { UserCatalog } from "./features/items/Catalog";
 const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Navigate to="/projects" replace />} />
+        <Route path="/items" element={<UserCatalog />} />
         <Route path="/settings/display" element={<DisplayPage />} />
         <Route path="/settings/account" element={<AccountPage />} />
         <Route element={<AdminRoute />}>

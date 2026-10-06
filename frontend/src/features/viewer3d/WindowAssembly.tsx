@@ -11,7 +11,9 @@ export function WindowAssembly({
   floor,
   selected,
   onSelect,
+  interactive = true,
 }: {
+  interactive?: boolean;
   window: Window;
   wall: Wall;
   floor: Floor;
@@ -36,6 +38,7 @@ export function WindowAssembly({
         screen: w.assembly?.screen,
       }}
       onClick={(e) => {
+        if (!interactive) return;
         e.stopPropagation();
         onSelect(w.id);
       }}

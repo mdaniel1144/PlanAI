@@ -71,6 +71,7 @@ export function Editor({
     tool,
     setTool: (next) => {
       setTool(next);
+      if (next !== "items") furniture.cancel();
       if (drawingTools.includes(next)) setMode((m) => (m === "3d" ? "2d" : m));
     },
     selected,
@@ -83,10 +84,11 @@ export function Editor({
     selected,
     select: setSelected,
     commit: drawing.commit,
-    startPlan: () => {
-      drawing.activate("select");
-      setMode("2d");
-    },
+    activate: drawing.activate,
+    tool,
+    snapGrid: drawing.snapGrid,
+    spacing: drawing.spacing,
+    busy: drawing.busy,
     onNotice: setNotice,
   });
   if (!floor)
@@ -167,11 +169,13 @@ export function Editor({
           </div>,
           headerTarget,
         )}
-      {furniture.modal}
       {furniture.pending && (
         <div className="placement-notice">
-          Choose a position on the plan. Escape cancels placement.{" "}
-          <button onClick={furniture.cancel}>Cancel placement</button>
+          Choose a position on the floor. Escape cancels placement.{" "}
+          <button onClick={furniture.rotate}>Rotate 90°</button>{" "}
+          <button onClick={() => drawing.activate("select")}>
+            Cancel placement
+          </button>
         </div>
       )}
       {furniture.error && <p role="alert">{furniture.error}</p>}
@@ -199,9 +203,6 @@ export function Editor({
               </div>
             </div>
             <div className="toolbar-end">
-              <button className="button secondary" onClick={furniture.open}>
-                Add Item
-              </button>
               <ViewOptions
                 drawing={drawing}
                 layers={layers}
@@ -229,106 +230,133 @@ export function Editor({
               </button>
             </div>
           </div>
-          <div
-            className={`canvas-stage ${drawing.grid ? "" : "grid-hidden"} ${mode === "split" ? "split-view" : ""}`}
-          >
-            <div className="canvas-label">
-              <span className="online-dot" /> {floor.name}
-              <span className="label-divider" />
-              {mode === "3d" ? "Perspective" : "Architectural plan"}
-            </div>
-            {mode === "2d" && (
-              <div
-                className="north-marker"
-                title="Canonical plan axes; geographic north is unknown"
-              >
-                <svg width="32" height="38" viewBox="0 0 32 38" fill="none">
-                  <path
-                    d="M4 5V29M4 5H25M1 25L4 29L7 25M21 2L25 5L21 8"
-                    stroke="#819174"
-                    strokeWidth="1"
+          <div className="canvas-body">
+            {furniture.panel}
+            <div
+              className={`canvas-stage ${drawing.grid ? "" : "grid-hidden"} ${mode === "split" ? "split-view" : ""}`}
+            >
+              <div className="canvas-label">
+                <span className="online-dot" /> {floor.name}
+                <span className="label-divider" />
+                {mode === "3d" ? "Perspective" : "Architectural plan"}
+              </div>
+              {mode === "2d" && (
+                <div
+                  className="north-marker"
+                  title="Canonical plan axes; geographic north is unknown"
+                >
+                  <svg width="32" height="38" viewBox="0 0 32 38" fill="none">
+                    <path
+                      d="M4 5V29M4 5H25M1 25L4 29L7 25M21 2L25 5L21 8"
+                      stroke="var(--text-secondary)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="25"
+                      y="18"
+                      fill="var(--text-secondary)"
+                      fontSize="7"
+                    >
+                      X
+                    </text>
+                    <text
+                      x="10"
+                      y="34"
+                      fill="var(--text-secondary)"
+                      fontSize="7"
+                    >
+                      Y
+                    </text>
+                  </svg>
+                </div>
+              )}
+              {mode !== "3d" && (
+                <div className="plan-view">
+                  <PlanView
+                    key={`${floor.id}-${reset}`}
+                    floor={floor}
+                    selected={selected}
+                    onSelect={select}
+                    interaction={drawing.interaction}
+                    itemLayer={furniture.layer}
+                    onPlanPoint={
+                      furniture.pending ? furniture.place : undefined
+                    }
+                    onPlanHover={
+                      furniture.pending ? furniture.hover : undefined
+                    }
+                    layers={layers}
+                    zoom={zoom}
+                    setZoom={setZoom}
+                    panMode={tool === "pan"}
                   />
-                  <text x="25" y="18" fill="#819174" fontSize="7">
-                    X
-                  </text>
-                  <text x="10" y="34" fill="#819174" fontSize="7">
-                    Y
-                  </text>
-                </svg>
-              </div>
-            )}
-            {mode !== "3d" && (
-              <div className="plan-view">
-                <PlanView
-                  key={`${floor.id}-${reset}`}
-                  floor={floor}
-                  selected={selected}
-                  onSelect={select}
-                  interaction={drawing.interaction}
-                  itemLayer={furniture.layer}
-                  onPlanPoint={furniture.pending ? furniture.place : undefined}
-                  onPlanHover={furniture.pending ? furniture.hover : undefined}
-                  layers={layers}
-                  zoom={zoom}
-                  setZoom={setZoom}
-                  panMode={tool === "pan"}
-                />
-              </div>
-            )}
-            {mode !== "2d" && (
-              <Suspense
-                fallback={
-                  <div className="loading-state">
-                    Building canonical 3D geometry…
-                  </div>
-                }
-              >
-                <SceneView
-                  key={`${floor.id}-${reset}`}
-                  floor={floor}
-                  selected={selected}
-                  onSelect={select}
-                  layers={layers}
-                  items={furniture.items}
-                />
-              </Suspense>
-            )}
-            <DrawingControls drawing={drawing} tool={tool} />
-            {mode !== "3d" && (
-              <div className="zoom-controls">
-                <button
-                  title="Zoom out"
-                  onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
+                </div>
+              )}
+              {mode !== "2d" && (
+                <Suspense
+                  fallback={
+                    <div className="loading-state">
+                      Building canonical 3D geometry…
+                    </div>
+                  }
                 >
-                  <Minus size={14} />
-                </button>
-                <span>{Math.round(zoom * 100)}%</span>
-                <button
-                  title="Zoom in"
-                  onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
-                >
-                  <Plus size={14} />
-                </button>
-                <i />
-                <button
-                  title="Fit plan"
-                  onClick={() => {
-                    setZoom(1);
-                    setReset((v) => v + 1);
-                  }}
-                >
-                  <Scan size={15} />
-                </button>
+                  <SceneView
+                    key={`${floor.id}-${reset}`}
+                    floor={floor}
+                    selected={selected}
+                    onSelect={select}
+                    layers={layers}
+                    items={furniture.items}
+                    placement={furniture.pending}
+                    placementPoint={furniture.pointer}
+                    placementElevation={furniture.elevation}
+                    placementValid={furniture.valid}
+                    onPlacementHover={furniture.hover}
+                    onPlace={furniture.place}
+                  />
+                </Suspense>
+              )}
+              <DrawingControls
+                drawing={drawing}
+                tool={tool}
+                onItems={furniture.open}
+              />
+              {mode !== "3d" && (
+                <div className="zoom-controls">
+                  <button
+                    title="Zoom out"
+                    onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span>{Math.round(zoom * 100)}%</span>
+                  <button
+                    title="Zoom in"
+                    onClick={() => setZoom((z) => Math.min(3, z + 0.1))}
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <i />
+                  <button
+                    title="Fit plan"
+                    onClick={() => {
+                      setZoom(1);
+                      setReset((v) => v + 1);
+                    }}
+                  >
+                    <Scan size={15} />
+                  </button>
+                </div>
+              )}
+              <div className="canvas-help">
+                {tool === "pan"
+                  ? "Drag to pan"
+                  : tool === "select"
+                    ? "Select an element · drag wall or endpoints to move"
+                    : ["draw-wall", "manual-room"].includes(tool)
+                      ? "Double-click to finish · Esc to select"
+                      : `Active tool: ${tool.replaceAll("-", " ")} · Esc to select`}
               </div>
-            )}
-            <div className="canvas-help">
-              {tool === "pan"
-                ? "Drag to pan"
-                : tool === "select"
-                  ? "Select an element · drag wall or endpoints to move"
-                  : ["draw-wall", "manual-room"].includes(tool)
-                    ? "Double-click to finish · Esc to select"
-                    : `Active tool: ${tool.replaceAll("-", " ")} · Esc to select`}
             </div>
           </div>
         </section>

@@ -117,7 +117,7 @@ describe("database and API", () => {
     expect(db.sqlite.pragma("foreign_keys", { simple: true })).toBe(1);
     expect(
       db.sqlite.prepare("SELECT COUNT(*) AS n FROM migrations").get(),
-    ).toEqual({ n: 13 });
+    ).toEqual({ n: 16 });
     expect(() =>
       db.sqlite
         .prepare("INSERT INTO home_scenes VALUES (?,?,?)")

@@ -18,7 +18,7 @@ export function DoorGlyph({
       data-hinge={door.hingedOrientation?.hingeEndpoint}
       data-swing={door.hingedOrientation?.swingSide}
       pointerEvents="none"
-      stroke={selected ? "#197d61" : "#627963"}
+      stroke={selected ? "var(--accent-primary)" : "var(--text-secondary)"}
       fill="none"
     >
       <path

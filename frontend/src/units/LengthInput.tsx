@@ -6,6 +6,7 @@ export function LengthInput({
   onMetersChange,
   onMetersCommit,
   onEmpty,
+  compact = false,
   ...props
 }: Omit<
   InputHTMLAttributes<HTMLInputElement>,
@@ -15,13 +16,18 @@ export function LengthInput({
   onMetersChange?: (n: number) => void;
   onMetersCommit?: (n: number | null) => void;
   onEmpty?: () => void;
+  compact?: boolean;
 }) {
   const u = useUnits();
   const basis = `${u.unit}:${meters}`;
   const [draft, setDraft] = useState<{ basis: string; text: string } | null>(
     null,
   );
-  const value = draft?.basis === basis ? draft.text : u.input(meters);
+  const formatted =
+    compact && meters != null
+      ? String(Number(u.value(meters)))
+      : u.input(meters);
+  const value = draft?.basis === basis ? draft.text : formatted;
   return (
     <input
       {...props}
@@ -30,12 +36,18 @@ export function LengthInput({
       value={value}
       onChange={(e) => {
         const text = e.target.value;
-        setDraft({ basis, text });
+        const next =
+          text !== "" && Number.isFinite(Number(text)) ? u.parse(text) : null;
+        setDraft({
+          basis: onMetersChange && next !== null ? `${u.unit}:${next}` : basis,
+          text,
+        });
         if (text === "") onEmpty?.();
         else if (Number.isFinite(Number(text))) onMetersChange?.(u.parse(text));
       }}
       onBlur={() => {
-        if (value === u.input(meters)) return;
+        if (compact) setDraft(null);
+        if (value === formatted) return;
         if (value === "") onMetersCommit?.(null);
         else if (Number.isFinite(Number(value)))
           onMetersCommit?.(u.parse(value));

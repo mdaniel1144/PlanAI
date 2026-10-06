@@ -10,7 +10,7 @@ import {
   distance,
 } from "@habitat/geometry";
 import type { Floor } from "@habitat/domain";
-import { roomColors, type Layers } from "./layers";
+import type { Layers } from "./layers";
 export function PlanView({
   floor,
   selected,
@@ -26,7 +26,7 @@ export function PlanView({
 }: {
   itemLayer?: ReactNode;
   onPlanPoint?: (p: { x: number; y: number }) => void;
-  onPlanHover?: (p: { x: number; y: number }) => void;
+  onPlanHover?: (p: { x: number; y: number } | null) => void;
   floor: Floor;
   selected: string | null;
   onSelect: (id: string) => void;
@@ -138,17 +138,20 @@ export function PlanView({
         }
         if (interaction?.tool !== "select" || e.button !== 0) return;
         const target = (e.target as Element).closest(
-          "[data-window-id], [data-wall-id]",
+          "[data-item-instance], [data-window-id], [data-wall-id]",
         );
         const p = canonical(e.currentTarget, e.clientX, e.clientY);
         if (target && p) {
           interaction.onDragStart(
-            (target.getAttribute("data-window-id") ??
+            (target.getAttribute("data-item-instance") ??
+              target.getAttribute("data-window-id") ??
               target.getAttribute("data-wall-id"))!,
-            (target.hasAttribute("data-window-id")
-              ? "window"
-              : (target.getAttribute("data-part") ?? "wall")) as
-              "start" | "end" | "wall" | "window",
+            (target.hasAttribute("data-item-instance")
+              ? "item"
+              : target.hasAttribute("data-window-id")
+                ? "window"
+                : (target.getAttribute("data-part") ?? "wall")) as
+              "start" | "end" | "wall" | "window" | "item",
             p,
           );
           editingDrag.current = true;
@@ -192,7 +195,10 @@ export function PlanView({
         editingDrag.current = false;
         interaction?.onDragCancel();
       }}
-      onPointerLeave={() => interaction?.onLeave()}
+      onPointerLeave={() => {
+        onPlanHover?.(null);
+        interaction?.onLeave();
+      }}
     >
       <defs>
         <pattern
@@ -204,7 +210,7 @@ export function PlanView({
           <path
             d={`M ${interaction?.spacing ?? 0.25} 0 H 0 V ${interaction?.spacing ?? 0.25}`}
             fill="none"
-            stroke="#cad6c8"
+            stroke="var(--grid-color)"
             strokeWidth=".009"
           />
         </pattern>
@@ -220,7 +226,7 @@ export function PlanView({
             y1="0"
             x2="0"
             y2=".18"
-            stroke="#c9c9b7"
+            stroke="var(--text-secondary)"
             strokeWidth=".016"
           />
         </pattern>
@@ -233,7 +239,7 @@ export function PlanView({
           <path
             d="M .5 0 H 0 V .5"
             fill="none"
-            stroke="#c4d5d5"
+            stroke="var(--border-primary)"
             strokeWidth=".012"
           />
         </pattern>
@@ -253,9 +259,9 @@ export function PlanView({
           <g key={r.id} className="selectable" onClick={(e) => pick(e, r.id)}>
             <polygon
               points={r.boundary.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill={roomColors[r.type] ?? "#f2eee6"}
+              fill="var(--room-fill)"
               fillOpacity={1}
-              stroke={selected === r.id ? "#77987d" : "none"}
+              stroke={selected === r.id ? "var(--text-secondary)" : "none"}
               strokeWidth=".06"
             />
             <polygon
@@ -271,9 +277,9 @@ export function PlanView({
             {selected === r.id && (
               <polygon
                 points={r.boundary.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill="#477854"
+                fill="var(--text-secondary)"
                 fillOpacity=".06"
-                stroke="#658971"
+                stroke="var(--text-secondary)"
                 strokeWidth=".026"
                 strokeDasharray=".1 .07"
               />
@@ -295,10 +301,10 @@ export function PlanView({
               y2={w.end.y}
               stroke={
                 selected === w.id
-                  ? "#197d61"
+                  ? "var(--accent-primary)"
                   : interaction?.hoverId === w.id
-                    ? "#97bba5"
-                    : "#424940"
+                    ? "var(--text-secondary)"
+                    : "var(--wall-stroke)"
               }
               strokeWidth={w.thickness ?? 0.025}
               strokeDasharray={w.thickness === null ? ".15 .1" : undefined}
@@ -336,7 +342,7 @@ export function PlanView({
                 y1={p.y}
                 x2={q.x}
                 y2={q.y}
-                stroke="#fafaf6"
+                stroke="var(--surface-secondary)"
                 strokeWidth={(w.thickness ?? 0.05) + 0.04}
               />
               {o.kind === "door" && (
@@ -356,7 +362,7 @@ export function PlanView({
                       y1="0"
                       x2={o.width}
                       y2="0"
-                      stroke="#9c8b66"
+                      stroke="var(--text-secondary)"
                       strokeWidth=".04"
                       strokeDasharray=".07 .06"
                     />
@@ -368,7 +374,7 @@ export function PlanView({
                       y1="-.05"
                       x2={o.width * 0.65}
                       y2="-.05"
-                      stroke="#6b8576"
+                      stroke="var(--text-secondary)"
                       strokeWidth=".045"
                     />
                     <line
@@ -376,7 +382,7 @@ export function PlanView({
                       y1=".05"
                       x2={o.width}
                       y2=".05"
-                      stroke="#6b8576"
+                      stroke="var(--text-secondary)"
                       strokeWidth=".045"
                     />
                   </>
@@ -402,8 +408,8 @@ export function PlanView({
                   cx={w[part].x}
                   cy={w[part].y}
                   r=".09"
-                  fill="white"
-                  stroke="#197d61"
+                  fill="var(--surface-primary)"
+                  stroke="var(--accent-primary)"
                   strokeWidth=".035"
                   style={{ cursor: "grab" }}
                 />
@@ -427,19 +433,25 @@ export function PlanView({
                   .map((p) => `${p.x},${p.y}`)
                   .join(" ")}
                 fill="none"
-                stroke="#197d61"
+                stroke="var(--accent-primary)"
                 strokeWidth={interaction.tool === "draw-wall" ? 0.12 : 0.025}
                 strokeDasharray=".09 .04"
               />
               {interaction.points.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r=".055" fill="#197d61" />
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y}
+                  r=".055"
+                  fill="var(--accent-primary)"
+                />
               ))}
               {interaction.pointer && (
                 <text
                   x={interaction.pointer.x + 0.12}
                   y={interaction.pointer.y - 0.18}
                   fontSize=".18"
-                  fill="#197d61"
+                  fill="var(--accent-primary)"
                 >
                   {units.format(
                     distance(interaction.points.at(-1)!, interaction.pointer),
@@ -459,14 +471,14 @@ export function PlanView({
                   cy={interaction.pointer.y}
                   r=".09"
                   fill="none"
-                  stroke="#197d61"
+                  stroke="var(--accent-primary)"
                   strokeWidth=".025"
                 />
                 <text
                   x={interaction.pointer.x + 0.14}
                   y={interaction.pointer.y + 0.25}
                   fontSize=".16"
-                  fill="#197d61"
+                  fill="var(--accent-primary)"
                 >
                   {interaction.snapLabel}
                 </text>
@@ -498,7 +510,9 @@ export function PlanView({
                     x2={b.x}
                     y2={b.y}
                     stroke={
-                      interaction.windowPlacementError ? "#be4848" : "#42aa89"
+                      interaction.windowPlacementError
+                        ? "var(--error)"
+                        : "var(--text-secondary)"
                     }
                     strokeWidth=".18"
                   />
@@ -524,15 +538,15 @@ export function PlanView({
                         height={Math.max(w.thickness ?? 0.12, 0.18) + 0.07}
                         fill={
                           interaction.windowPlacementError
-                            ? "#be484833"
+                            ? "color-mix(in srgb, var(--error) 20%, transparent)"
                             : "none"
                         }
                         stroke={
                           interaction.windowPlacementError
-                            ? "#be4848"
+                            ? "var(--error)"
                             : interaction.windowPlacementAdjusted
-                              ? "#ab761e"
-                              : "#197d61"
+                              ? "var(--warning)"
+                              : "var(--accent-primary)"
                         }
                         strokeWidth=".04"
                         strokeDasharray={
@@ -546,8 +560,8 @@ export function PlanView({
                         fontSize=".16"
                         fill={
                           interaction.windowPlacementError
-                            ? "#a33232"
-                            : "#53644b"
+                            ? "var(--error)"
+                            : "var(--text-secondary)"
                         }
                       >
                         {interaction.windowPlacementError
@@ -578,7 +592,7 @@ export function PlanView({
                 y1={e.start.y}
                 x2={e.end.x}
                 y2={e.end.y}
-                stroke="#768d8e"
+                stroke="var(--text-secondary)"
                 strokeWidth=".04"
                 strokeDasharray=".15 .12"
                 pointerEvents="none"
@@ -598,11 +612,16 @@ export function PlanView({
               y="-.03"
               fontSize={r.type === "hallway" ? ".20" : ".24"}
               fontWeight="500"
-              fill="#454c42"
+              fill="var(--text-primary)"
             >
               {r.name}
             </text>
-            <text textAnchor="middle" y=".32" fontSize=".19" fill="#8a8f83">
+            <text
+              textAnchor="middle"
+              y=".32"
+              fontSize=".19"
+              fill="var(--text-secondary)"
+            >
               {r.computedArea === null
                 ? "Area unknown"
                 : `${r.computedArea.toFixed(1)} m²`}
@@ -612,13 +631,18 @@ export function PlanView({
             </text>
             {selected === r.id && (
               <g transform="translate(-.37 .55)">
-                <rect width=".74" height=".25" rx=".08" fill="#d9e5d9" />
+                <rect
+                  width=".74"
+                  height=".25"
+                  rx=".08"
+                  fill="var(--surface-secondary)"
+                />
                 <text
                   x=".37"
                   y=".172"
                   textAnchor="middle"
                   fontSize=".115"
-                  fill="#4b7257"
+                  fill="var(--text-secondary)"
                 >
                   SELECTED
                 </text>
@@ -627,7 +651,7 @@ export function PlanView({
           </g>
         ))}
       {layers.dimensions && (
-        <g stroke="#9a9f91" strokeWidth=".014" fill="none">
+        <g stroke="var(--text-secondary)" strokeWidth=".014" fill="none">
           {floor.dimensions.map((d) => {
             if (d.value === null) return null;
             const horizontal = Math.abs(d.end.y - d.start.y) < 0.01;
@@ -646,7 +670,7 @@ export function PlanView({
                     y={y - 0.18}
                     width="1.1"
                     height=".3"
-                    fill="#f7f8f3"
+                    fill="var(--surface-secondary)"
                     stroke="none"
                   />
                   <text
@@ -654,7 +678,7 @@ export function PlanView({
                     y={y + 0.04}
                     textAnchor="middle"
                     stroke="none"
-                    fill="#818878"
+                    fill="var(--text-secondary)"
                     fontSize=".19"
                   >
                     {units.format(d.value)}
@@ -672,7 +696,7 @@ export function PlanView({
                   transform={`translate(${x + 0.24} ${(d.start.y + d.end.y) / 2}) rotate(-90)`}
                   textAnchor="middle"
                   stroke="none"
-                  fill="#818878"
+                  fill="var(--text-secondary)"
                   fontSize=".19"
                 >
                   {units.format(d.value)}
@@ -685,10 +709,11 @@ export function PlanView({
             y={maxY + 0.62}
             stroke="none"
             fontSize=".14"
-            fill="#999e93"
+            fill="var(--text-secondary)"
             letterSpacing=".025"
           >
-            {floor.name.toUpperCase()} · ALL DIMENSIONS IN METERS
+            {floor.name.toUpperCase()} · LENGTHS IN{" "}
+            {units.unit === "CM" ? "CENTIMETERS" : "METERS"}
           </text>
           <path
             d={`M ${maxX - 2} ${maxY + 0.52} h 2 m -2 -.07 v .14 m 1 -.14 v .14 m 1 -.14 v .14`}
@@ -697,7 +722,7 @@ export function PlanView({
             x={maxX - 2}
             y={maxY + 0.84}
             fontSize=".13"
-            fill="#999e93"
+            fill="var(--text-secondary)"
             stroke="none"
           >
             0
@@ -707,7 +732,7 @@ export function PlanView({
             y={maxY + 0.84}
             textAnchor="end"
             fontSize=".13"
-            fill="#999e93"
+            fill="var(--text-secondary)"
             stroke="none"
           >
             2 m

@@ -399,7 +399,74 @@ it("manages one model with three colors, validates uploads and scopes materials 
     ).body;
     expect(
       (await user.get(`/api/scenes/${scene.id}`)).body.floors[0].itemInstances,
-    ).toEqual([placed]);
+    ).toEqual([{ ...placed, modelAssetId: modelId }]);
+    const counts = () =>
+      Object.fromEntries(
+        ["items", "item_variants", "item_assets", "categories"].map((table) => [
+          table,
+          (
+            a.repo.db.sqlite
+              .prepare(`SELECT COUNT(*) AS n FROM ${table}`)
+              .get() as { n: number }
+          ).n,
+        ]),
+      );
+    const canonicalCounts = counts();
+    const save = async (value: typeof scene) =>
+      (
+        await user
+          .put(`/api/scenes/${scene.id}`)
+          .send({
+            scene: value,
+            expectedRevision: scene.revision,
+            writerCapabilities: ["items-v1"],
+          })
+          .expect(200)
+      ).body;
+    scene.floors[0].itemInstances = Array.from({ length: 5 }, (_, index) => ({
+      ...placed,
+      id: index ? randomUUID() : placed.id,
+      positionX: 2 + index,
+      modelAssetId: modelId,
+    }));
+    scene = await save(scene);
+    expect(scene.floors[0].itemInstances).toHaveLength(5);
+    expect(counts()).toEqual(canonicalCounts);
+    for (const instance of scene.floors[0].itemInstances) {
+      expect(instance.modelAssetId).toBe(modelId);
+      expect(instance).not.toHaveProperty("width");
+      expect(instance).not.toHaveProperty("name");
+    }
+    const forged = structuredClone(scene);
+    forged.floors[0].itemInstances[0].modelAssetId = randomUUID();
+    await user
+      .put(`/api/scenes/${scene.id}`)
+      .send({
+        scene: forged,
+        expectedRevision: scene.revision,
+        writerCapabilities: ["items-v1"],
+      })
+      .expect(409);
+    scene.floors[0].itemInstances.pop();
+    scene = await save(scene);
+    expect(scene.floors[0].itemInstances).toHaveLength(4);
+    expect(counts()).toEqual(canonicalCounts);
+    await user.get(`/api/item-assets/${modelId}`).expect(200);
+    // Current architecture locks used technical data instead of publishing V2
+    // under the same Product. Appearance must obey the same reproducibility rule.
+    await admin
+      .patch(`${path}/variants/${placed.variantId}`)
+      .send({ overrides: [{ slotId, materialId: null, baseColor: "#123456" }] })
+      .expect(409);
+    const usedMaterial = item.variants[0].overrides[0].materialId;
+    if (usedMaterial)
+      await admin
+        .patch(`${path}/materials/${usedMaterial}`)
+        .send({ roughness: 0.123 })
+        .expect(409);
+    scene.floors[0].itemInstances = [scene.floors[0].itemInstances[0]];
+    scene = await save(scene);
+
     await admin
       .patch(`${path}/assets/${modelId}/calibration`)
       .send(

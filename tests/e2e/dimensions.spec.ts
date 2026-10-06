@@ -65,9 +65,7 @@ test("verified calibration uses canonical metres, survives live CM/M changes, an
   ).toBeVisible();
   const raw = page.getByText(/model units \(width × depth × height\)/);
   const rawBefore = await raw.textContent();
-  await page
-    .getByRole("combobox", { name: "Product orientation", exact: true })
-    .selectOption("90");
+  await page.getByRole("radio", { name: "90°", exact: true }).check();
   await expect(page.getByText(/Oriented model axes/)).toContainText(
     "width 2.0000, depth 0.7837",
   );
@@ -78,7 +76,9 @@ test("verified calibration uses canonical metres, survives live CM/M changes, an
     ["height", ".6017"],
   ])
     await page.getByLabel(`Real ${k} (cm)`).fill(v);
-  await expect(page.getByText(/ITEM_DIMENSIONS_IMPLAUSIBLE/)).toBeVisible();
+  await expect(
+    page.getByText(/These dimensions appear unusually/),
+  ).toBeVisible();
   await expect(page.getByText(/Suggested interpretation:/)).toContainText(
     "200 × 78.37 × 60.17 cm",
   );
@@ -150,10 +150,8 @@ test("verified calibration uses canonical metres, survives live CM/M changes, an
   const settings = await page.context().newPage();
   await settings.goto("/settings/display");
   await settings.getByRole("radio", { name: "Meters", exact: true }).check();
-  await settings
-    .getByRole("button", { name: "Save display preference" })
-    .click();
-  await expect(settings.getByText("Display preference saved.")).toBeVisible();
+
+  await expect(settings.getByText("All preferences saved")).toBeVisible();
   await expect(page.getByLabel("Real width (m)", { exact: true })).toHaveValue(
     "2",
   );
@@ -195,6 +193,19 @@ test("verified calibration uses canonical metres, survives live CM/M changes, an
     "data-world-bounds",
     boundString!,
   );
+  for (const name of [
+    "Front view",
+    "Side view",
+    "Top view",
+    "Fit view",
+    "Reset camera",
+  ]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator(".item-preview")).toHaveAttribute(
+      "data-world-bounds",
+      boundString!,
+    );
+  }
   const after = await (await page.request.get(path)).json();
   for (const key of [
     "width",
@@ -248,6 +259,7 @@ test("CM workspace lengths edit in centimetres while preference-only changes pre
   });
   await page.goto(`/projects/${project.id}/editor`);
   await expect(page.locator(".plan-svg")).toBeVisible();
+  await expect(page.getByText(/LENGTHS IN CENTIMETERS/)).toBeVisible();
   const point = await page.locator(".plan-svg").evaluate((svg) => {
     const p = new DOMPoint(4, 0).matrixTransform(
       (svg as SVGSVGElement).getScreenCTM()!,
@@ -270,25 +282,22 @@ test("CM workspace lengths edit in centimetres while preference-only changes pre
   const settings = await page.context().newPage();
   await settings.goto("/settings/display");
   await settings.getByRole("radio", { name: "Meters", exact: true }).check();
-  await settings
-    .getByRole("button", { name: "Save display preference" })
-    .click();
-  await expect(settings.getByText("Display preference saved.")).toBeVisible();
+
+  await expect(settings.getByText("All preferences saved")).toBeVisible();
   await expect(page.getByLabel("Wall length (m)", { exact: true })).toHaveValue(
     "8",
   );
   await expect(page.getByLabel("Move wall X", { exact: true })).toHaveValue(
     "-1",
   );
+  await expect(page.getByText(/LENGTHS IN METERS/)).toBeVisible();
   expect(
     (await (await request.get(`/api/scenes/${initial.id}`)).json()).floors,
   ).toEqual(before.floors);
   await settings
     .getByRole("radio", { name: "Centimeters", exact: true })
     .check();
-  await settings
-    .getByRole("button", { name: "Save display preference" })
-    .click();
+
   await expect(
     page.getByLabel("Wall length (cm)", { exact: true }),
   ).toHaveValue("800");

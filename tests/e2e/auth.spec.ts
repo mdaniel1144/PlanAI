@@ -70,12 +70,27 @@ test("USER login, cookie, reload, route guards, accessible account menu and serv
   expect(await page.evaluate(() => document.cookie)).not.toContain(
     "habitat_session",
   );
-  expect(
-    await page.evaluate(() => ({
-      local: { ...localStorage },
-      session: { ...sessionStorage },
-    })),
-  ).toEqual({ local: {}, session: {} });
+  const storage = await page.evaluate(() => ({
+    local: { ...localStorage },
+    session: { ...sessionStorage },
+  }));
+  const me = await (await context.request.get("/api/auth/me")).json();
+  const preferencesKey = `habitat:display-preferences:${me.id}`;
+  // Display preferences are deliberately cached; authentication remains cookie-only.
+  expect(storage.session).toEqual({});
+  expect(Object.keys(storage.local)).toEqual([preferencesKey]);
+  expect(JSON.parse(storage.local[preferencesKey]!)).toEqual({
+    version: 1,
+    userId: me.id,
+    cachedAt: expect.any(String),
+    preferences: {
+      theme: me.theme,
+      lengthDisplayUnit: me.lengthDisplayUnit,
+      displayUpdatedAt: me.displayUpdatedAt,
+      displayRevision: me.displayRevision,
+    },
+  });
+  expect(JSON.stringify(storage)).not.toContain(cookie.value);
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Test Architect", exact: true }),

@@ -1,6 +1,7 @@
 import { useUnits } from "../../units/useUnits";
 import {
   MousePointer2,
+  Armchair,
   Hand,
   PencilRuler,
   DoorOpen,
@@ -19,9 +20,11 @@ import type { DrawingEditor } from "./useDrawing";
 export function DrawingControls({
   drawing: d,
   tool,
+  onItems,
 }: {
   drawing: DrawingEditor;
   tool: string;
+  onItems: () => void;
 }) {
   const u = useUnits();
   return (
@@ -53,6 +56,7 @@ export function DrawingControls({
             shortcut: "N",
             icon: AppWindow,
           },
+          { key: "items", label: "Items", shortcut: "", icon: Armchair },
           { key: "measure", label: "Measure", shortcut: "M", icon: Ruler },
           { key: "delete", label: "Delete", shortcut: "", icon: Trash2 },
         ].map(({ key, label, shortcut, icon: Icon }) => (
@@ -63,7 +67,7 @@ export function DrawingControls({
             className={tool === key ? "active" : ""}
             aria-pressed={tool === key}
             disabled={d.busy}
-            onClick={() => d.activate(key)}
+            onClick={() => (key === "items" ? onItems() : d.activate(key))}
           >
             <Icon size={18} />
           </button>

@@ -51,6 +51,7 @@ export const createSceneRequest = z
   .strict();
 
 export * from "./auth";
+export * from "./display";
 
 export {
   itemInput,

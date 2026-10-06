@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "0.0.0.0",
+    // Prepare the lazy preview graph before the first item is opened. This
+    // transforms code only; product GLBs remain loaded on demand in the browser.
+    warmup: { clientFiles: ["./src/features/items/ModelPreview.tsx"] },
     proxy: { "/api": { target: "http://127.0.0.1:3001", changeOrigin: false } },
   },
   preview: {

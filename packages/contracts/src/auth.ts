@@ -1,9 +1,6 @@
 import { z } from "zod";
-import {
-  userRoleSchema,
-  userStatusSchema,
-  lengthDisplayUnitSchema,
-} from "@habitat/domain";
+import { userRoleSchema, userStatusSchema } from "@habitat/domain";
+import { displayPreferencesSchema } from "./display";
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 export const passwordSchema = z
@@ -15,13 +12,12 @@ const name = z.string().trim().min(1).max(120);
 export const loginRequest = z
   .object({ email, password: z.string().min(1).max(PASSWORD_MAX_LENGTH) })
   .strict();
-export const currentUserSchema = z.object({
+export const currentUserSchema = displayPreferencesSchema.extend({
   id: z.string().uuid(),
   name,
   email,
   role: userRoleSchema,
   status: userStatusSchema,
-  lengthDisplayUnit: lengthDisplayUnitSchema.default("CM"),
 });
 export const managedUserSchema = currentUserSchema.extend({
   createdAt: z.string(),

@@ -99,7 +99,7 @@ export class Repository {
         ];
         const instances = this.db.sqlite
           .prepare(
-            "SELECT id,floor_id AS floorId,space_id AS spaceId,item_id AS itemId,variant_id AS variantId,position_x AS positionX,position_y AS positionY,rotation FROM project_item_instances WHERE state_id=? AND floor_id=? ORDER BY id",
+            "SELECT id,floor_id AS floorId,space_id AS spaceId,item_id AS itemId,variant_id AS variantId,model_asset_id AS modelAssetId,position_x AS positionX,position_y AS positionY,rotation FROM project_item_instances WHERE state_id=? AND floor_id=? ORDER BY id",
           )
           .all(row.id, f.id);
         return {
@@ -224,7 +224,7 @@ export class Repository {
       for (const instance of f.itemInstances ?? [])
         sql
           .prepare(
-            "INSERT INTO project_item_instances VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO project_item_instances VALUES (?,?,?,?,?,?,?,?,?,?)",
           )
           .run(
             instance.id,
@@ -236,6 +236,7 @@ export class Repository {
             instance.positionX,
             instance.positionY,
             instance.rotation,
+            instance.modelAssetId ?? null,
           );
     sql
       .prepare("UPDATE home_scenes SET current_revision=? WHERE id=?")

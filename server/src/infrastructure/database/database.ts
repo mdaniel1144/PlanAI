@@ -35,6 +35,9 @@ export function openDatabase(path: string) {
     "0011_project_ownership",
     "0012_fixed_product_colors",
     "0013_dimension_verification",
+    "0014_display_preferences",
+    "0015_blue_theme",
+    "0016_placement_asset_pin",
   ]) {
     if (!sqlite.prepare("SELECT name FROM migrations WHERE name=?").get(name)) {
       const sql = readFileSync(
